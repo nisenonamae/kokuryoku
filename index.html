@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#131a2b">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>国力年報</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --ground:#131a2b;
+    --panel:#1a2236;
+    --rule:#2b3550;
+    --text:#e9e7e0;
+    --muted:#8c95ab;
+    --brass:#c9a227;
+    --asagi:#57a8a6;
+    --suou:#a85560;
+    --moss:#7f9457;
+    --plum:#8a7bb0;
+  }
+  *{box-sizing:border-box}
+  .conn{border:1px solid var(--rule);background:var(--panel);padding:.9rem 1rem;margin:0 0 1.4rem;border-radius:4px}
+  .conn[hidden]{display:none}
+  .conn h2{margin:0 0 .5rem;font-size:1rem;color:var(--brass);letter-spacing:.08em}
+  .conn p{margin:.2rem 0 .6rem;color:var(--muted);font-size:.85rem;line-height:1.6}
+  .conn .g{display:grid;grid-template-columns:repeat(auto-fill,minmax(9rem,1fr));gap:.5rem .7rem}
+  .conn label{display:block;font-size:.75rem;color:var(--muted);margin-bottom:.15rem}
+  .conn input{width:100%;padding:.4rem .5rem;border:1px solid var(--rule);background:var(--ground);color:var(--text);border-radius:3px;font:inherit}
+  .conn .row{display:flex;gap:.6rem;align-items:center;margin-top:.8rem;flex-wrap:wrap}
+  .btn{border:1px solid var(--brass);background:var(--brass);color:var(--ground);border-radius:3px;padding:.4rem .9rem;font:inherit;font-weight:600;cursor:pointer}
+  .btn.ghost{background:transparent;color:var(--brass)}
+  .msg{font-size:.85rem;color:var(--muted)}
+  .msg.err{color:var(--suou)}
+  .tools{display:flex;gap:.5rem;justify-content:flex-end;margin:-.6rem 0 1rem}
+  .tools button{border:1px solid var(--rule);background:transparent;color:var(--muted);border-radius:3px;padding:.25rem .7rem;font:inherit;font-size:.8rem;cursor:pointer}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--ground);
+    color:var(--text);
+    font-family:"Shippori Mincho",-apple-system,"Hiragino Mincho ProN",serif;
+    font-weight:400;
+    line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:clamp(1.5rem,4vw,3.5rem) clamp(1rem,4vw,2rem) 5rem}
+
+  /* 題字 */
+  .masthead{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:1rem;flex-wrap:wrap;
+    padding-bottom:1rem;border-bottom:2px solid var(--brass);
+  }
+  .masthead h1{
+    font-size:clamp(1.9rem,5vw,2.9rem);font-weight:800;
+    letter-spacing:.22em;margin:0;
+  }
+  .stamp{color:var(--muted);font-size:.86rem;letter-spacing:.06em}
+
+  /* 主景 */
+  .hero{margin:2.5rem 0 3rem}
+  .hero-head{display:flex;align-items:flex-end;gap:1.4rem;flex-wrap:wrap;margin-bottom:1rem}
+  .hero-head h2{font-size:1.15rem;font-weight:600;margin:0;letter-spacing:.14em}
+  .figure{
+    font-size:clamp(2.4rem,7vw,3.6rem);font-weight:800;color:var(--brass);
+    line-height:1;font-variant-numeric:tabular-nums;
+  }
+  .delta{font-size:.95rem;color:var(--muted);font-variant-numeric:tabular-nums}
+  .delta.up{color:var(--moss)}
+  .delta.down{color:var(--suou)}
+
+  .aside{
+    display:flex;align-items:baseline;gap:.5rem;
+    padding-left:1.1rem;border-left:1px solid var(--rule);
+  }
+  .aside-label{font-size:.78rem;letter-spacing:.14em;color:var(--muted)}
+  .aside-figure{
+    font-size:clamp(1.2rem,4vw,1.6rem);font-weight:600;color:var(--asagi);
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* 計算方法の版 */
+  .rules{display:flex;flex-wrap:wrap;gap:.2rem .9rem;margin-top:.7rem;font-size:.74rem}
+  .rule{display:flex;align-items:baseline;gap:.35rem;color:var(--muted);cursor:default}
+  .rule i{display:inline-block;width:.7rem;height:.7rem;border-radius:1px}
+  .rule b{color:var(--text);font-weight:500}
+
+  /* 戦況図 */
+  .front-panel{margin-bottom:1.5rem}
+  .gaps{margin-top:1.2rem;display:grid;gap:.1rem}
+  .gap-row{
+    display:grid;align-items:baseline;gap:.9rem;
+    grid-template-columns:5.5rem 7.5rem 1fr;
+    padding:.5rem 0;border-bottom:1px solid rgba(43,53,80,.55);font-size:.86rem;
+  }
+  .gap-row:last-child{border-bottom:none}
+  .gap-name{font-weight:600;letter-spacing:.06em}
+  .gap-kind{font-size:.74rem;letter-spacing:.08em;white-space:nowrap}
+  .gap-kind.idle{color:var(--suou)}
+  .gap-kind.thin{color:var(--brass)}
+  .gap-kind.near{color:var(--asagi)}
+  .gap-kind.over{color:var(--plum)}
+  .gap-why{color:var(--muted);line-height:1.5}
+  .gap-why b{color:var(--text);font-weight:500}
+  .gap-none{color:var(--muted);font-size:.84rem;padding:.6rem 0}
+
+  /* レギュレーション */
+  .rule-row{
+    display:grid;align-items:baseline;gap:.9rem;
+    grid-template-columns:3rem 6rem 2.2rem 1fr;
+    padding:.5rem 0;border-bottom:1px solid rgba(43,53,80,.55);font-size:.86rem;
+  }
+  .rule-row:last-child{border-bottom:none}
+  .rule-v{font-weight:600;color:var(--brass);font-variant-numeric:tabular-nums}
+  .rule-d{font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .rule-i{font-size:.72rem;letter-spacing:.08em;white-space:nowrap}
+  .rule-i.大{color:var(--suou)} .rule-i.中{color:var(--brass)} .rule-i.小{color:var(--muted)}
+  .rule-c{line-height:1.55}
+  .rule-c small{display:block;color:var(--muted);font-size:.78rem;margin-top:.1rem}
+
+  /* 国富の一覧 */
+  table.wealth{width:100%;border-collapse:collapse;font-size:.86rem}
+  table.wealth th{
+    text-align:left;font-weight:400;color:var(--muted);
+    padding:0 .6rem .5rem 0;border-bottom:1px solid var(--rule);
+    font-size:.78rem;letter-spacing:.08em;white-space:nowrap;
+  }
+  table.wealth td{
+    padding:.45rem .6rem .45rem 0;border-bottom:1px solid rgba(43,53,80,.5);
+  }
+  table.wealth td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  table.wealth td.now{color:var(--asagi)}
+  table.wealth td.min{color:var(--muted);white-space:nowrap}
+
+  /* 図表 */
+  .grid{display:grid;gap:1.6rem;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .panel{
+    background:var(--panel);border:1px solid var(--rule);
+    padding:1.4rem 1.3rem 1.1rem;
+  }
+  .panel h3{
+    font-size:.98rem;font-weight:600;margin:0 0 .2rem;letter-spacing:.1em;
+  }
+  .panel p.note{color:var(--muted);font-size:.8rem;margin:0 0 1rem}
+  .canvas-box{position:relative;height:260px}
+  .tall .canvas-box{height:320px}
+  .full{grid-column:1/-1}
+
+  /* 空の状態 */
+  .empty{
+    display:flex;align-items:center;justify-content:center;height:100%;
+    color:var(--muted);font-size:.88rem;text-align:center;padding:0 1.5rem;
+    border:1px dashed var(--rule);
+  }
+
+  footer{margin-top:3rem;color:var(--muted);font-size:.78rem;border-top:1px solid var(--rule);padding-top:1rem}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <h1>国力年報</h1>
+    <div class="stamp" id="stamp">読み込み中</div>
+  </header>
+  <div class="tools"><button type="button" id="reload">読み込み直す</button><button type="button" id="open-conn">接続</button></div>
+
+  <section class="conn" id="conn" hidden>
+    <h2>接続</h2>
+    <p>国力の集計は非公開のリポジトリにあります。行軍表と同じトークンが使えます。トークンはこの端末にだけ保存されます。</p>
+    <div class="g">
+      <div><label for="c-owner">ユーザー名</label><input id="c-owner" autocomplete="off"></div>
+      <div><label for="c-repo">リポジトリ</label><input id="c-repo" autocomplete="off"></div>
+      <div><label for="c-branch">ブランチ</label><input id="c-branch" autocomplete="off"></div>
+    </div>
+    <div style="margin-top:.5rem"><label for="c-token">トークン</label><input id="c-token" type="password" autocomplete="off"></div>
+    <div class="row"><button class="btn" id="connect" type="button">接続して読み込む</button><span class="msg" id="conn-msg"></span></div>
+  </section>
+
+  <div id="board">
+
+  <section class="hero">
+    <div class="hero-head">
+      <h2>総国力</h2>
+      <div class="figure" id="power-now">—</div>
+      <div class="delta" id="power-delta"></div>
+      <div class="aside">
+        <span class="aside-label">国富</span>
+        <span class="aside-figure" id="wealth-now">—</span>
+      </div>
+    </div>
+    <div class="canvas-box tall" id="box-power"><canvas id="ch-power"></canvas></div>
+    <div class="rules" id="rules"></div>
+  </section>
+
+  <section class="panel full front-panel">
+    <h3>戦況</h3>
+    <p class="note">重要度に対して力が足りていない省ほど、右下に落ちる</p>
+    <div class="canvas-box tall" id="box-map"><canvas id="ch-map"></canvas></div>
+    <div id="front"></div>
+  </section>
+
+  <section class="panel full">
+    <h3>成長率</h3>
+    <p class="note">前回からどれだけ伸びたか。絶対値より勢いが見える</p>
+    <div class="canvas-box" id="box-growth"><canvas id="ch-growth"></canvas></div>
+  </section>
+
+  <section class="panel full">
+    <h3>レギュレーション</h3>
+    <p class="note">計算方法を変えた記録。グラフの帯と対応する</p>
+    <div id="rules"></div>
+  </section>
+
+  <div class="grid">
+    <section class="panel">
+      <h3>省別の時間配分</h3>
+      <p class="note">今週、開始と終了を記録した分</p>
+      <div class="canvas-box" id="box-pie"><canvas id="ch-pie"></canvas></div>
+    </section>
+
+    <section class="panel">
+      <h3>日別の合計時間</h3>
+      <p class="note">記録がある日のみ</p>
+      <div class="canvas-box" id="box-day"><canvas id="ch-day"></canvas></div>
+    </section>
+
+    <section class="panel">
+      <h3>国力の内訳</h3>
+      <p class="note">最新の計算時点。省ごとの取り分</p>
+      <div class="canvas-box" id="box-power-share"><canvas id="ch-power-share"></canvas></div>
+    </section>
+
+    <section class="panel">
+      <h3>国富の内訳</h3>
+      <p class="note">減価したあとの現在値</p>
+      <div class="canvas-box" id="box-wealth-share"><canvas id="ch-wealth-share"></canvas></div>
+    </section>
+
+    <section class="panel full">
+      <h3>国富の中身</h3>
+      <p class="note">取得時の価値と、いま残っている分</p>
+      <div id="wealth-list"></div>
+    </section>
+
+    <section class="panel full">
+      <h3>省別の領土と支配</h3>
+      <p class="note">最新の計算時点</p>
+      <div class="canvas-box tall" id="box-min"><canvas id="ch-min"></canvas></div>
+    </section>
+
+    <section class="panel full">
+      <h3>タスク別の所要時間</h3>
+      <p class="note">短くなっていれば世代を上げる頃合い</p>
+      <div class="canvas-box tall" id="box-task"><canvas id="ch-task"></canvas></div>
+    </section>
+  </div>
+
+  <footer id="foot"></footer>
+  </div>
+</div>
+
+<script>
+const C = {
+  brass:'#c9a227', asagi:'#57a8a6', suou:'#a85560',
+  moss:'#7f9457', plum:'#8a7bb0', muted:'#8c95ab',
+  rule:'#2b3550', text:'#e9e7e0'
+};
+const SERIES = [C.brass, C.asagi, C.moss, C.plum, C.suou, '#6f8fbf', '#bf8a5a', '#5f9e7d'];
+
+Chart.defaults.color = C.muted;
+Chart.defaults.borderColor = C.rule;
+Chart.defaults.font.family = '"Shippori Mincho", serif';
+Chart.defaults.font.size = 12;
+
+const axes = (yTitle) => ({
+  x:{ grid:{color:C.rule, drawTicks:false}, ticks:{maxRotation:0, autoSkipPadding:12} },
+  y:{ beginAtZero:true, grid:{color:C.rule}, title:{display:!!yTitle, text:yTitle, color:C.muted} }
+});
+
+/* 国力グラフの背景に、レギュレーションの期間を帯で敷く。
+   段差が実力の変化か式の変化かを見分けるため。 */
+function rulePlugin(rules, dates){
+  var SHADE = ['rgba(201,162,39,.05)','rgba(87,168,166,.06)','rgba(138,123,176,.06)',
+               'rgba(168,85,96,.05)','rgba(127,148,87,.06)'];
+  return {
+    id:'rules',
+    beforeDatasetsDraw:function(chart){
+      if (!rules.length || !dates.length) return;
+      var ctx = chart.ctx, xs = chart.scales.x, area = chart.chartArea;
+      function posOf(dateStr){
+        for (var i=0;i<dates.length;i++){ if (dates[i] >= dateStr) return xs.getPixelForValue(i); }
+        return null;
+      }
+      ctx.save();
+      rules.forEach(function(r, i){
+        var from = posOf(r.from);
+        if (from === null) return;
+        var next = rules[i+1] ? posOf(rules[i+1].from) : null;
+        var to = (next === null) ? area.right : next;
+        if (to <= from) return;
+        ctx.fillStyle = SHADE[i % SHADE.length];
+        ctx.fillRect(from, area.top, to - from, area.bottom - area.top);
+        ctx.strokeStyle = 'rgba(236,231,221,.18)';
+        ctx.setLineDash([3,3]); ctx.beginPath();
+        ctx.moveTo(from, area.top); ctx.lineTo(from, area.bottom); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(236,231,221,.5)';
+        ctx.font = '10px "Shippori Mincho", serif';
+        ctx.fillText(r.version, from + 3, area.top + 11);
+      });
+      ctx.restore();
+    }
+  };
+}
+
+function empty(boxId, message){
+  document.getElementById(boxId).innerHTML = '<div class="empty">'+message+'</div>';
+}
+
+function hhmm(min){
+  const h = Math.floor(min/60), m = Math.round(min%60);
+  return h ? h+'時間'+(m?m+'分':'') : m+'分';
+}
+
+/* 国力の集計(docs/data/stats.json)を、非公開のリポジトリからトークンで読む。
+   前回読んだ分を端末に残し、開いた瞬間はそれを出す。通信できなくても見られる。 */
+const KEY_CONN = "kokuryoku-conn", KEY_CACHE = "kokuryoku-cache";
+const STATS_PATH = "docs/data/stats.json";
+const BOARD = document.getElementById("board").innerHTML;
+const lsGet = (k, fb) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch (e) { return fb; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+
+function show(d){
+  // 描き直すたびに盤面を作り直す(グラフを重ねて描かないため)
+  if (window.Chart && Chart.instances) Object.values(Chart.instances).forEach(c => { try { c.destroy(); } catch (e) {} });
+  document.getElementById("board").innerHTML = BOARD;
+  draw(d);
+}
+
+function b64utf8(b64){
+  const bin = atob(String(b64).replace(/\s/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+async function load(){
+  const c = lsGet(KEY_CONN, null);
+  const msg = document.getElementById("conn-msg");
+  if (!c || !c.token) { document.getElementById("conn").hidden = false; return false; }
+  const url = "https://api.github.com/repos/" + encodeURIComponent(c.owner) + "/" + encodeURIComponent(c.repo) +
+              "/contents/" + STATS_PATH + "?ref=" + encodeURIComponent(c.branch || "main");
+  const headers = { "Authorization": "Bearer " + c.token, "Accept": "application/vnd.github+json" };
+  try {
+    const r = await fetch(url, { headers, cache: "no-store" });
+    if (r.status === 401) throw new Error("トークンが無効です。接続から入れ直してください。");
+    if (r.status === 404) throw new Error("集計(" + STATS_PATH + ")が見つかりません。毎朝の計算が一度動くまで待ってください。");
+    if (!r.ok) throw new Error("GitHubとの通信に失敗しました(" + r.status + ")。");
+    const meta = await r.json();
+    let text;
+    if (meta.content) text = b64utf8(meta.content);
+    else {
+      const raw = await fetch(url, { headers: Object.assign({}, headers, { "Accept": "application/vnd.github.raw+json" }), cache: "no-store" });
+      text = await raw.text();
+    }
+    const d = JSON.parse(text);
+    lsSet(KEY_CACHE, d);
+    show(d);
+    if (msg) { msg.classList.remove("err"); msg.textContent = "読み込みました"; }
+    return true;
+  } catch (e) {
+    if (msg) { msg.classList.add("err"); msg.textContent = e.message; }
+    document.getElementById("stamp").textContent = e.message;
+    return false;
+  }
+}
+
+(function boot(){
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
+  const c = lsGet(KEY_CONN, {});
+  document.getElementById("c-owner").value = c.owner || "nisenonamae";
+  document.getElementById("c-repo").value = c.repo || "notion-daily";
+  document.getElementById("c-branch").value = c.branch || "main";
+  document.getElementById("c-token").value = c.token || "";
+  document.getElementById("open-conn").addEventListener("click", () => {
+    const p = document.getElementById("conn"); p.hidden = !p.hidden;
+  });
+  document.getElementById("reload").addEventListener("click", () => {
+    document.getElementById("stamp").textContent = "読み込み中";
+    load();
+  });
+  document.getElementById("connect").addEventListener("click", async () => {
+    const v = id => document.getElementById(id).value.trim();
+    lsSet(KEY_CONN, { owner: v("c-owner"), repo: v("c-repo"), branch: v("c-branch") || "main", token: v("c-token") });
+    if (await load()) document.getElementById("conn").hidden = true;
+  });
+  const cached = lsGet(KEY_CACHE, null);
+  if (cached) show(cached);
+  load();
+})();
+
+function draw(d){
+  document.getElementById('stamp').textContent = d.generated_at + ' 時点';
+  document.getElementById('foot').textContent =
+    '毎朝、アプリの記録とNotionの国力ログから集計。数字は自動計算で、手入力はしていない。';
+
+  /* 総国力 */
+  const hist = d.power_history || [];
+  if (hist.length) {
+    const last = hist[hist.length-1];
+    document.getElementById('power-now').textContent = last.power.toFixed(1);
+    if (hist.length > 1) {
+      const diff = last.power - hist[hist.length-2].power;
+      const el = document.getElementById('power-delta');
+      el.textContent = (diff>=0?'前回比 +':'前回比 ') + diff.toFixed(1);
+      el.classList.add(diff>=0 ? 'up' : 'down');
+    }
+    var rules = d.rules || [];
+    // 各点がどの版で計算されたかを引く
+    function ruleAt(date){
+      var hit = null;
+      rules.forEach(function(r){ if (r.from <= date) hit = r; });
+      return hit;
+    }
+    var segColors = hist.map(function(r){
+      var h = ruleAt(r.date);
+      return h ? h.color : C.brass;
+    });
+
+    new Chart(document.getElementById('ch-power'), {
+      type:'line',
+      data:{ labels: hist.map(r=>r.date.slice(5)), datasets:[{
+        data: hist.map(r=>r.power),
+        borderColor: C.brass,
+        backgroundColor:'rgba(201,162,39,.10)',
+        borderWidth:2, fill:true, tension:.25,
+        pointRadius:3.5,
+        pointBackgroundColor: segColors,
+        pointBorderColor: segColors,
+        segment:{ borderColor: function(ctx){
+          return segColors[ctx.p1DataIndex] || C.brass; } }
+      }]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false},
+          tooltip:{callbacks:{afterLabel:function(c){
+            var h = ruleAt(hist[c.dataIndex].date);
+            return h ? h.version : '';
+          }}} },
+        scales:axes() },
+      plugins:[{
+        id:'ruleLines',
+        beforeDatasetsDraw:function(chart){
+          // 計算方法を変えた日に縦線を引く
+          var ctx = chart.ctx, xs = chart.scales.x, ys = chart.scales.y;
+          ctx.save();
+          rules.forEach(function(r){
+            var i = hist.findIndex(function(h){ return h.date >= r.from; });
+            if (i < 0) return;
+            var x = xs.getPixelForValue(i);
+            ctx.strokeStyle = r.color; ctx.lineWidth = 1;
+            ctx.setLineDash([3,3]);
+            ctx.beginPath(); ctx.moveTo(x, ys.top); ctx.lineTo(x, ys.bottom); ctx.stroke();
+          });
+          ctx.restore();
+        }
+      }]
+    });
+
+    // 版の凡例
+    var rel = document.getElementById('rules');
+    if (rules.length) {
+      rel.innerHTML = rules.map(function(r){
+        return '<span class="rule" title="' + (r.change || '').replace(/"/g,'&quot;') + '">'
+             + '<i style="background:' + r.color + '"></i>'
+             + '<b>' + r.version + '</b> ' + r.from.slice(5) + '〜</span>';
+      }).join('');
+    }
+  } else {
+    empty('box-power','国力の記録がまだありません。');
+  }
+
+  /* 省別の時間配分 */
+  const tm = d.time_by_ministry || [];
+  if (tm.length) {
+    new Chart(document.getElementById('ch-pie'), {
+      type:'doughnut',
+      data:{ labels: tm.map(r=>r.ministry), datasets:[{
+        data: tm.map(r=>r.minutes),
+        backgroundColor: tm.map((_,i)=>SERIES[i%SERIES.length]),
+        borderColor:'#1a2236', borderWidth:2
+      }]},
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'52%',
+        plugins:{ legend:{position:'right', labels:{boxWidth:10, padding:10}},
+          tooltip:{callbacks:{label:c=>c.label+' '+hhmm(c.parsed)}} } }
+    });
+  } else {
+    empty('box-pie','開始と終了を記録すると、ここに省ごとの配分が出ます。');
+  }
+
+  /* 日別の合計時間 */
+  const td = d.time_by_day || [];
+  if (td.length) {
+    new Chart(document.getElementById('ch-day'), {
+      type:'bar',
+      data:{ labels: td.map(r=>r.date.slice(5)), datasets:[{
+        data: td.map(r=>r.minutes), backgroundColor:C.asagi, borderRadius:2
+      }]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false},
+          tooltip:{callbacks:{label:c=>hhmm(c.parsed.y)}} },
+        scales: axes('分') }
+    });
+  } else {
+    empty('box-day','記録がある日から順に積み上がります。');
+  }
+
+  /* 成長率 */
+  var gp = (d.growth && d.growth.power) || [];
+  var gw = (d.growth && d.growth.wealth) || [];
+  if (gp.length) {
+    new Chart(document.getElementById('ch-growth'), {
+      type:'line',
+      data:{ labels: gp.map(r=>r.date.slice(5)), datasets:[
+        { label:'国力', data: gp.map(r=>r.rate), borderColor:C.brass,
+          borderWidth:2, tension:.25, pointRadius:3, spanGaps:true },
+        { label:'国富', data: gw.map(r=>r.rate), borderColor:C.plum,
+          borderWidth:2, tension:.25, pointRadius:3, spanGaps:true }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{position:'top', labels:{boxWidth:10}},
+          tooltip:{callbacks:{label:function(c){
+            return c.dataset.label + ' ' + (c.parsed.y >= 0 ? '+' : '') + c.parsed.y + '%';
+          }}} },
+        scales:{
+          x:{ grid:{color:C.rule}, ticks:{maxRotation:0, autoSkipPadding:12} },
+          y:{ grid:{color:C.rule}, title:{display:true, text:'%', color:C.muted} }
+        } }
+    });
+  } else {
+    empty('box-growth','2回以上計算すると、伸び率が出ます。');
+  }
+
+  /* レギュレーション */
+  var rl = d.rules || [];
+  var rel = document.getElementById('rules');
+  if (rl.length) {
+    rel.innerHTML = rl.slice().reverse().map(function(r){
+      return '<div class="rule-row">'
+        + '<span class="rule-v">' + r.version + '</span>'
+        + '<span class="rule-d">' + r.from + '</span>'
+        + '<span class="rule-i ' + r.impact + '">' + r.impact + '</span>'
+        + '<span class="rule-c">' + r.change
+        + (r.why ? '<small>' + r.why + '</small>' : '') + '</span></div>';
+    }).join('');
+  } else {
+    rel.innerHTML = '<div class="empty" style="height:100px">'
+      + '計算方法を変えたら記録すると、ここと国力グラフの帯に出ます。</div>';
+  }
+
+  /* 戦況図 */
+  var fr = d.front || [];
+  if (fr.length) {
+    // 重要度に対して国力が足りない省ほど右下に来る
+    new Chart(document.getElementById('ch-map'), {
+      type:'scatter',
+      data:{ datasets:[{
+        data: fr.map(function(r){
+          return { x: r.weight, y: r.power, label: r.ministry };
+        }),
+        backgroundColor: fr.map(function(r){
+          var ratio = r.weight > 0 ? r.power / r.weight : 1;
+          return ratio < 0.15 ? '#a85560' : (ratio < 0.5 ? '#c9a227' : '#57a8a6');
+        }),
+        pointRadius: 7, pointHoverRadius: 9
+      }]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        layout:{padding:{top:10,right:18}},
+        plugins:{ legend:{display:false},
+          tooltip:{callbacks:{label:function(c){
+            var r = fr[c.dataIndex];
+            return r.ministry + '  国力' + r.power.toFixed(1)
+                 + ' / 重要度' + r.weight.toFixed(1);
+          }}},
+          datalabels:false },
+        scales:{
+          x:{ beginAtZero:true, grid:{color:C.rule},
+              title:{display:true, text:'重要度 →  他省がどれだけ必要としているか', color:C.muted} },
+          y:{ beginAtZero:true, grid:{color:C.rule},
+              title:{display:true, text:'国力 →  実際に出せている力', color:C.muted} }
+        } },
+      plugins:[{
+        id:'names',
+        afterDatasetsDraw:function(chart){
+          var ctx = chart.ctx, meta = chart.getDatasetMeta(0);
+          ctx.save();
+          ctx.fillStyle = C.text;
+          ctx.font = '11px "Shippori Mincho", serif';
+          meta.data.forEach(function(pt, i){
+            ctx.fillText(fr[i].ministry, pt.x + 10, pt.y + 4);
+          });
+          ctx.restore();
+        }
+      }]
+    });
+  } else {
+    empty('box-map','国力を計算すると、盤面が描かれます。');
+  }
+
+  /* 歪みの一覧。見るべきところだけを挙げる。 */
+  var gaps = [];
+  fr.forEach(function(r){
+    var ratio = r.weight > 0 ? r.power / r.weight : 1;
+    if (r.weight >= 5 && ratio < 0.15) {
+      gaps.push([0, r.ministry, 'idle', '手つかず',
+        '重要度<b>' + r.weight.toFixed(1) + '</b>に対して国力<b>'
+        + r.power.toFixed(1) + '</b>。'
+        + (r.territory < 1 ? 'タスクが無い' : '動いていない')]);
+    } else if (r.territory >= 5 && r.dominance < 5) {
+      gaps.push([1, r.ministry, 'thin', '広げすぎ',
+        '領土<b>' + r.territory.toFixed(0) + '</b>に対して支配<b>'
+        + r.dominance.toFixed(0) + '</b>。手を広げて統治できていない']);
+    } else if (r.weight > 0 && ratio > 1.5 && r.power >= 3) {
+      gaps.push([3, r.ministry, 'over', '振りすぎ',
+        '重要度<b>' + r.weight.toFixed(1) + '</b>に対して国力<b>'
+        + r.power.toFixed(1) + '</b>。他に回す余地がある']);
+    }
+  });
+  var gel = document.getElementById('front');
+  if (gaps.length) {
+    gel.innerHTML = '<div class="gaps">' + gaps.sort(function(a,b){return a[0]-b[0];})
+      .map(function(g){
+        return '<div class="gap-row"><span class="gap-name">' + g[1] + '</span>'
+             + '<span class="gap-kind ' + g[2] + '">' + g[3] + '</span>'
+             + '<span class="gap-why">' + g[4] + '</span></div>';
+      }).join('') + '</div>';
+  } else {
+    gel.innerHTML = '<div class="gap-none">目立った歪みはありません。</div>';
+  }
+
+  /* 国富の総量 */
+  var wt = d.wealth_total || 0;
+  document.getElementById('wealth-now').textContent = wt ? wt.toFixed(1) : '0';
+
+  /* 国力の内訳 */
+  var ml0 = (d.ministry_latest || []).filter(function(r){ return r.power > 0; });
+  if (ml0.length) {
+    new Chart(document.getElementById('ch-power-share'), {
+      type:'doughnut',
+      data:{ labels: ml0.map(r=>r.ministry), datasets:[{
+        data: ml0.map(r=>r.power),
+        backgroundColor: ml0.map((_,i)=>SERIES[i%SERIES.length]),
+        borderColor:'#1a2236', borderWidth:2
+      }]},
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'52%',
+        plugins:{ legend:{position:'right', labels:{boxWidth:10, padding:10}},
+          tooltip:{callbacks:{label:function(c){
+            var sum = c.dataset.data.reduce(function(a,b){return a+b;},0);
+            return c.label + ' ' + c.parsed.toFixed(1) + '  (' + (c.parsed/sum*100).toFixed(0) + '%)';
+          }}} } }
+    });
+  } else {
+    empty('box-power-share','国力を計算すると、省ごとの取り分が出ます。');
+  }
+
+  /* 国富の内訳 */
+  var wm = d.wealth_by_ministry || [];
+  if (wm.length) {
+    new Chart(document.getElementById('ch-wealth-share'), {
+      type:'doughnut',
+      data:{ labels: wm.map(r=>r.ministry), datasets:[{
+        data: wm.map(r=>r.value),
+        backgroundColor: wm.map((_,i)=>SERIES[i%SERIES.length]),
+        borderColor:'#1a2236', borderWidth:2
+      }]},
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'52%',
+        plugins:{ legend:{position:'right', labels:{boxWidth:10, padding:10}},
+          tooltip:{callbacks:{label:function(c){
+            var sum = c.dataset.data.reduce(function(a,b){return a+b;},0);
+            return c.label + ' ' + c.parsed.toFixed(1) + '  (' + (c.parsed/sum*100).toFixed(0) + '%)';
+          }}} } }
+    });
+  } else {
+    empty('box-wealth-share','達成済みにしたタスクや、作った仕組みがここに積み上がります。');
+  }
+
+  /* 国富の中身 */
+  var wi = d.wealth_items || [];
+  var wl = document.getElementById('wealth-list');
+  if (wi.length) {
+    var rows = wi.map(function(r){
+      var keep = r.value ? Math.round(r.now / r.value * 100) : 0;
+      return '<tr><td>' + r.item + '</td>'
+           + '<td class="min">' + r.ministry + '</td>'
+           + '<td class="min">' + (r.acquired || '') + '</td>'
+           + '<td class="num">' + r.value + '</td>'
+           + '<td class="num now">' + r.now + '</td>'
+           + '<td class="num min">' + keep + '%</td></tr>';
+    }).join('');
+    wl.innerHTML = '<table class="wealth"><thead><tr>'
+      + '<th>項目</th><th>省</th><th>取得</th>'
+      + '<th style="text-align:right">取得時</th>'
+      + '<th style="text-align:right">現在</th>'
+      + '<th style="text-align:right">残存</th></tr></thead><tbody>'
+      + rows + '</tbody></table>';
+  } else {
+    wl.innerHTML = '<div class="empty" style="height:120px">'
+      + '達成済みにしたタスクが、翌朝ここに移ります。</div>';
+  }
+
+  /* 省別の領土と支配 */
+  const ml = d.ministry_latest || [];
+  if (ml.length) {
+    new Chart(document.getElementById('ch-min'), {
+      type:'bar',
+      data:{ labels: ml.map(r=>r.ministry), datasets:[
+        { label:'領土', data: ml.map(r=>r.territory), backgroundColor:C.brass, borderRadius:2, yAxisID:'y' },
+        { label:'支配', data: ml.map(r=>r.dominance), backgroundColor:C.asagi, borderRadius:2, yAxisID:'y1' }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{position:'top', labels:{boxWidth:10}} },
+        scales:{
+          x:{ grid:{display:false} },
+          y:{ beginAtZero:true, position:'left', grid:{color:C.rule},
+              title:{display:true, text:'領土(重み合計)', color:C.muted} },
+          y1:{ beginAtZero:true, max:100, position:'right', grid:{display:false},
+               title:{display:true, text:'支配', color:C.muted} }
+        } }
+    });
+  } else {
+    empty('box-min','国力を計算すると、省ごとの内訳が出ます。');
+  }
+
+  /* タスク別の所要時間 */
+  const ts = d.task_time_series || [];
+  if (ts.length) {
+    const dates = [...new Set(ts.flatMap(s=>s.points.map(p=>p.date)))].sort();
+    new Chart(document.getElementById('ch-task'), {
+      type:'line',
+      data:{ labels: dates.map(x=>x.slice(5)),
+        datasets: ts.map((s,i)=>({
+          label:s.task,
+          data: dates.map(dt => { const p = s.points.find(q=>q.date===dt); return p ? p.minutes : null; }),
+          borderColor:SERIES[i%SERIES.length], backgroundColor:SERIES[i%SERIES.length],
+          borderWidth:1.8, tension:.2, pointRadius:2.5, spanGaps:true
+        }))
+      },
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{position:'bottom', labels:{boxWidth:10, padding:8}},
+          tooltip:{callbacks:{label:c=>c.dataset.label+' '+hhmm(c.parsed.y)}} },
+        scales: axes('分') }
+    });
+  } else {
+    empty('box-task','同じタスクを2回以上計ると、推移が引かれます。');
+  }
+}
+</script>
+</body>
+</html>
