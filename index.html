@@ -58,6 +58,11 @@
   .pos{color:var(--asagi)} .neg{color:var(--suou)}
   .tchg{display:flex;justify-content:space-between;gap:.6rem;font-size:.86rem;padding:.25rem 0;border-bottom:1px dashed var(--rule)}
   .tchg span:last-child{color:var(--muted);font-size:.78rem;text-align:right}
+  .nlink{display:inline-block;border:1px solid var(--rule);border-radius:3px;padding:.2rem .6rem;font-size:.82rem;color:var(--text);text-decoration:none}
+  .nlink::after{content:" ↗";color:var(--muted)}
+  .nrow{margin:.2rem 0 .5rem}
+  .nplace{display:flex;gap:.6rem;align-items:baseline;padding:.35rem 0;border-bottom:1px dashed var(--rule);flex-wrap:wrap}
+  .nplace span{font-size:.8rem;color:var(--muted)}
   .fold>summary{cursor:pointer;color:var(--muted);font-size:.86rem;padding:.3rem 0}
   .summary{font-size:.95rem;line-height:1.7;margin:.2rem 0 .8rem}
   .tools{display:flex;gap:.5rem;justify-content:flex-end;margin:-.6rem 0 1rem}
@@ -201,7 +206,9 @@
   </div>
 
   <section class="conn" id="conn" hidden>
-    <h2>接続</h2>
+    <h2>どこで直すか</h2>
+    <p>国富・時勢・レギュレーションはNotionにあり、Claudeに頼んで直します。省とその依存先は省アプリで直します。どれも翌朝の計算から年報に入ります。</p>
+    <h2 style="margin-top:1.2rem">接続</h2>
     <p>国力の集計は非公開のリポジトリにあります。行軍表と同じトークンが使えます。トークンはこの端末にだけ保存されます。</p>
     <div class="g">
       <div><label for="c-owner">ユーザー名</label><input id="c-owner" autocomplete="off"></div>
