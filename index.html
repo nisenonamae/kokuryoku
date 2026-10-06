@@ -470,6 +470,10 @@ function attribution(d, R){
 const RANK = { "要再設定": 0, "新規": 1, "進行中": 2, "定着": 3, "熟達": 4, "殿堂入り": 5 };
 function renderCauses(d, R){
   const box = document.getElementById("causes"); if (!box) return;
+  const mh = d.ministry_history;
+  if (!mh) { box.innerHTML = '<div class="note">集計がまだ前の形のままです。notion-daily の build_stats.py を新しいものに差し替えて、Actions で App daily を一度動かし、設定の「読み込み直す」を押してください。</div>'; return; }
+  const days = new Set(mh.map(x => x.date)).size;
+  if (days < 2) { box.innerHTML = '<div class="note">国力の記録がまだ' + days + '日分しかありません。毎朝の計算で1日ずつ増えていき、2日分そろうと比べられます。</div>'; return; }
   const at = R && attribution(d, R);
   if (!at || at.S === at.E) { box.innerHTML = '<div class="note">この期間には、比べられる2日分の記録がありません。期間を広げてください。</div>'; return; }
   const sum = at.rows.reduce((s, r) => s + r.total, 0);
