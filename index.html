@@ -38,6 +38,14 @@
   .btn.ghost{background:transparent;color:var(--brass)}
   .msg{font-size:.85rem;color:var(--muted)}
   .msg.err{color:var(--suou)}
+  body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--rule);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+  nav.tabs button{flex:1;border:none;background:none;padding:.8rem 0;cursor:pointer;color:var(--muted);font:inherit;font-weight:600;font-size:.86rem;min-width:0}
+  nav.tabs button[aria-selected="true"]{color:var(--brass);box-shadow:inset 0 3px 0 var(--brass)}
+  .cmp{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;margin:.2rem 0 .8rem}
+  .cmp button{border:1px solid var(--rule);background:transparent;color:var(--muted);border-radius:3px;padding:.25rem .7rem;font:inherit;font-size:.82rem;cursor:pointer}
+  .cmp button[aria-pressed="true"]{background:var(--brass);border-color:var(--brass);color:var(--ground);font-weight:600}
+  .cmp input{background:var(--ground);border:1px solid var(--rule);color:var(--text);border-radius:3px;padding:.2rem .4rem;font:inherit;font-size:.82rem}
   .range{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;margin:0 0 1rem}
   .range button{border:1px solid var(--rule);background:transparent;color:var(--muted);border-radius:3px;padding:.25rem .7rem;font:inherit;font-size:.82rem;cursor:pointer}
   .range button[aria-pressed="true"]{background:var(--brass);border-color:var(--brass);color:var(--ground);font-weight:600}
@@ -185,7 +193,7 @@
     <h1>国力年報</h1>
     <div class="stamp" id="stamp">読み込み中</div>
   </header>
-  <div class="tools"><button type="button" id="reload">読み込み直す</button><button type="button" id="open-conn">接続</button></div>
+  <div class="tools" hidden><button type="button" id="open-conn">接続</button></div>
   <div class="range" id="range" role="group" aria-label="見る期間">
     <button type="button" data-range="7">7日</button><button type="button" data-range="30">30日</button><button type="button" data-range="90">90日</button>
     <button type="button" data-range="180">180日</button><button type="button" data-range="all">全期間</button>
@@ -201,12 +209,12 @@
       <div><label for="c-branch">ブランチ</label><input id="c-branch" autocomplete="off"></div>
     </div>
     <div style="margin-top:.5rem"><label for="c-token">トークン</label><input id="c-token" type="password" autocomplete="off"></div>
-    <div class="row"><button class="btn" id="connect" type="button">接続して読み込む</button><span class="msg" id="conn-msg"></span></div>
+    <div class="row"><button class="btn" id="connect" type="button">接続して読み込む</button><button class="btn ghost" id="reload" type="button">読み込み直す</button><span class="msg" id="conn-msg"></span></div>
   </section>
 
   <div id="board">
 
-  <section class="hero">
+  <section data-tab="国力" class="hero">
     <div class="hero-head">
       <h2>総国力</h2>
       <div class="figure" id="power-now">—</div>
@@ -220,69 +228,74 @@
     <div class="rules" id="rules"></div>
   </section>
 
-  <section class="panel full">
+  <section data-tab="要因" class="panel full">
     <h3>何が国力を動かしたか</h3>
-    <p class="note" id="cause-note">選んだ期間のはじめとおわりを比べ、省ごとの増減を、領土・支配・重要度・国富に割り振っています</p>
+    <div class="cmp" id="cmp" role="group" aria-label="比べ方">
+      <button type="button" data-cmp="1">前日比</button><button type="button" data-cmp="7">1週間</button><button type="button" data-cmp="30">1ヶ月</button>
+      <button type="button" data-cmp="custom">期間を選ぶ</button>
+      <span id="cmp-dates" hidden><input type="date" id="c-from" aria-label="はじめ"> 〜 <input type="date" id="c-to" aria-label="おわり"></span>
+    </div>
+    <p class="note" id="cause-note">はじめとおわりを比べ、省ごとの増減を、領土・支配・重要度・国富に割り振っています</p>
     <div id="causes"></div>
   </section>
 
-  <section class="panel full front-panel">
+  <section data-tab="省" class="panel full front-panel">
     <h3>戦況</h3>
     <p class="note">重要度に対して力が足りていない省ほど、右下に落ちる</p>
     <div class="canvas-box tall" id="box-map"><canvas id="ch-map"></canvas></div>
     <div id="front"></div>
   </section>
 
-  <section class="panel full">
+  <section data-tab="国力" class="panel full">
     <h3>成長率</h3>
     <p class="note">選んだ期間のはじめから、どれだけ伸びたか(%)</p>
     <div class="canvas-box" id="box-growth"><canvas id="ch-growth"></canvas></div>
   </section>
 
-  <section class="panel full">
+  <section data-tab="国力" class="panel full">
     <h3>レギュレーション</h3>
     <p class="note">計算方法を変えた記録。グラフの帯と対応する</p>
     <div id="rules"></div>
   </section>
 
   <div class="grid">
-    <section class="panel">
+    <section data-tab="時間" class="panel">
       <h3>省別の時間配分</h3>
       <p class="note">今週、開始と終了を記録した分</p>
       <div class="canvas-box" id="box-pie"><canvas id="ch-pie"></canvas></div>
     </section>
 
-    <section class="panel">
+    <section data-tab="時間" class="panel">
       <h3>日別の合計時間</h3>
       <p class="note">記録がある日のみ</p>
       <div class="canvas-box" id="box-day"><canvas id="ch-day"></canvas></div>
     </section>
 
-    <section class="panel">
+    <section data-tab="省" class="panel">
       <h3>国力の内訳</h3>
       <p class="note">最新の計算時点。省ごとの取り分</p>
       <div class="canvas-box" id="box-power-share"><canvas id="ch-power-share"></canvas></div>
     </section>
 
-    <section class="panel">
+    <section data-tab="国富" class="panel">
       <h3>国富の内訳</h3>
       <p class="note">減価したあとの現在値</p>
       <div class="canvas-box" id="box-wealth-share"><canvas id="ch-wealth-share"></canvas></div>
     </section>
 
-    <section class="panel full">
+    <section data-tab="国富" class="panel full">
       <h3>国富の中身</h3>
       <p class="note">取得時の価値と、いま残っている分</p>
       <div id="wealth-list"></div>
     </section>
 
-    <section class="panel full">
+    <section data-tab="省" class="panel full">
       <h3>省別の領土と支配</h3>
       <p class="note">最新の計算時点</p>
       <div class="canvas-box tall" id="box-min"><canvas id="ch-min"></canvas></div>
     </section>
 
-    <section class="panel full">
+    <section data-tab="時間" class="panel full">
       <h3>タスク別の所要時間</h3>
       <p class="note">短くなっていれば世代を上げる頃合い</p>
       <div class="canvas-box tall" id="box-task"><canvas id="ch-task"></canvas></div>
@@ -293,6 +306,10 @@
   </div>
 </div>
 
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="国力">国力</button><button role="tab" data-tab="要因">要因</button><button role="tab" data-tab="省">省</button>
+  <button role="tab" data-tab="国富">国富</button><button role="tab" data-tab="時間">時間</button><button role="tab" data-tab="設定">設定</button>
+</nav>
 <script>
 const C = {
   brass:'#c9a227', asagi:'#57a8a6', suou:'#a85560',
@@ -366,6 +383,36 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 
 
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+
+/* ───── 下のタブ ───── */
+const KEY_TAB = "kokuryoku-tab", KEY_CMP = "kokuryoku-cmp";
+const curTab = () => lsGet(KEY_TAB, "国力");
+function applyTab(){
+  const t = curTab();
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+  document.querySelectorAll("#board [data-tab]").forEach(sec => { sec.hidden = sec.dataset.tab !== t; });
+  document.getElementById("board").hidden = t === "設定";
+  document.getElementById("range").hidden = t !== "国力";
+  const c = lsGet(KEY_CONN, null);
+  document.getElementById("conn").hidden = !(t === "設定" || !c || !c.token);
+}
+/* ───── 要因の比べ方:前日比・1週間・1ヶ月・期間を選ぶ ───── */
+function causeRange(d){
+  const dates = Array.from(new Set((d.ministry_history || []).map(x => x.date))).sort();
+  if (dates.length < 2) return null;
+  const m = lsGet(KEY_CMP, { mode: "1" }), E = dates[dates.length - 1];
+  const back = n => { const want = new Date(Date.parse(E + "T00:00:00Z") - n * 864e5).toISOString().slice(0, 10); return dates.filter(x => x <= want).pop() || dates[0]; };
+  if (m.mode === "custom") return { from: m.from || back(7), to: m.to || E, mode: "custom" };   // 日付がまだ空なら、仮に1週間
+  if (m.mode === "1") return { from: dates[dates.length - 2], to: E, mode: "1" };
+  return { from: back(+m.mode || 7), to: E, mode: m.mode };
+}
+function renderCmp(R){
+  const m = lsGet(KEY_CMP, { mode: "1" });
+  document.querySelectorAll("[data-cmp]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.cmp === m.mode)));
+  const box = document.getElementById("cmp-dates"); if (box) box.hidden = m.mode !== "custom";
+  if (R) { const f = document.getElementById("c-from"), t = document.getElementById("c-to"); if (f) f.value = R.from; if (t) t.value = R.to; }
+}
 
 /* ───── 見る期間 ───── */
 const KEY_RANGE = "kokuryoku-range";
@@ -456,7 +503,10 @@ function show(d){
   const v = inRange(d);
   renderRange(v.R);
   draw(v.d);
-  renderCauses(d, v.R);
+  const CR = causeRange(d);
+  renderCmp(CR);
+  renderCauses(d, CR);
+  applyTab();
 }
 
 function b64utf8(b64){
@@ -507,6 +557,22 @@ async function load(){
   document.getElementById("open-conn").addEventListener("click", () => {
     const p = document.getElementById("conn"); p.hidden = !p.hidden;
   });
+  document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => {
+    lsSet(KEY_TAB, b.dataset.tab);
+    const c = lsGet(KEY_CACHE, null); if (c && b.dataset.tab !== "設定") show(c); else applyTab();
+    window.scrollTo && window.scrollTo(0, 0);
+  }));
+  document.getElementById("board").addEventListener("click", e => {
+    const b = e.target.closest("[data-cmp]"); if (!b) return;
+    const m = lsGet(KEY_CMP, { mode: "1" });
+    lsSet(KEY_CMP, b.dataset.cmp === "custom" ? { mode: "custom", from: m.from, to: m.to } : { mode: b.dataset.cmp });
+    const c = lsGet(KEY_CACHE, null); if (c) show(c);
+  });
+  document.getElementById("board").addEventListener("change", e => {
+    if (e.target.id !== "c-from" && e.target.id !== "c-to") return;
+    lsSet(KEY_CMP, { mode: "custom", from: document.getElementById("c-from").value, to: document.getElementById("c-to").value });
+    const c = lsGet(KEY_CACHE, null); if (c) show(c);
+  });
   document.getElementById("range").addEventListener("click", e => {
     const b = e.target.closest("[data-range]"); if (!b) return;
     lsSet(KEY_RANGE, { mode: b.dataset.range });
@@ -523,10 +589,10 @@ async function load(){
   document.getElementById("connect").addEventListener("click", async () => {
     const v = id => document.getElementById(id).value.trim();
     lsSet(KEY_CONN, { owner: v("c-owner"), repo: v("c-repo"), branch: v("c-branch") || "main", token: v("c-token") });
-    if (await load()) document.getElementById("conn").hidden = true;
+    if (await load()) { lsSet(KEY_TAB, "国力"); const c2 = lsGet(KEY_CACHE, null); if (c2) show(c2); }
   });
   const cached = lsGet(KEY_CACHE, null);
-  if (cached) show(cached);
+  if (cached) show(cached); else applyTab();
   load();
 })();
 
