@@ -38,6 +38,20 @@
   .btn.ghost{background:transparent;color:var(--brass)}
   .msg{font-size:.85rem;color:var(--muted)}
   .msg.err{color:var(--suou)}
+  .range{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;margin:0 0 1rem}
+  .range button{border:1px solid var(--rule);background:transparent;color:var(--muted);border-radius:3px;padding:.25rem .7rem;font:inherit;font-size:.82rem;cursor:pointer}
+  .range button[aria-pressed="true"]{background:var(--brass);border-color:var(--brass);color:var(--ground);font-weight:600}
+  .range input{background:var(--ground);border:1px solid var(--rule);color:var(--text);border-radius:3px;padding:.2rem .4rem;font:inherit;font-size:.82rem}
+  .cause{display:grid;grid-template-columns:minmax(6rem,auto) 4.5rem 1fr;gap:.3rem .8rem;align-items:baseline;padding:.45rem 0;border-bottom:1px solid var(--rule)}
+  .cause .cn{font-weight:600}
+  .cause .cv{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+  .cause .cf{display:flex;flex-wrap:wrap;gap:.3rem}
+  .cause .cf span{font-size:.78rem;border:1px solid var(--rule);border-radius:10px;padding:0 .5rem;color:var(--muted)}
+  .pos{color:var(--asagi)} .neg{color:var(--suou)}
+  .tchg{display:flex;justify-content:space-between;gap:.6rem;font-size:.86rem;padding:.25rem 0;border-bottom:1px dashed var(--rule)}
+  .tchg span:last-child{color:var(--muted);font-size:.78rem;text-align:right}
+  .fold>summary{cursor:pointer;color:var(--muted);font-size:.86rem;padding:.3rem 0}
+  .summary{font-size:.95rem;line-height:1.7;margin:.2rem 0 .8rem}
   .tools{display:flex;gap:.5rem;justify-content:flex-end;margin:-.6rem 0 1rem}
   .tools button{border:1px solid var(--rule);background:transparent;color:var(--muted);border-radius:3px;padding:.25rem .7rem;font:inherit;font-size:.8rem;cursor:pointer}
   html,body{margin:0;padding:0}
@@ -172,6 +186,11 @@
     <div class="stamp" id="stamp">読み込み中</div>
   </header>
   <div class="tools"><button type="button" id="reload">読み込み直す</button><button type="button" id="open-conn">接続</button></div>
+  <div class="range" id="range" role="group" aria-label="見る期間">
+    <button type="button" data-range="7">7日</button><button type="button" data-range="30">30日</button><button type="button" data-range="90">90日</button>
+    <button type="button" data-range="180">180日</button><button type="button" data-range="all">全期間</button>
+    <span><input type="date" id="r-from" aria-label="はじめ"> 〜 <input type="date" id="r-to" aria-label="おわり"></span>
+  </div>
 
   <section class="conn" id="conn" hidden>
     <h2>接続</h2>
@@ -201,6 +220,12 @@
     <div class="rules" id="rules"></div>
   </section>
 
+  <section class="panel full">
+    <h3>何が国力を動かしたか</h3>
+    <p class="note" id="cause-note">選んだ期間のはじめとおわりを比べ、省ごとの増減を、領土・支配・重要度・国富に割り振っています</p>
+    <div id="causes"></div>
+  </section>
+
   <section class="panel full front-panel">
     <h3>戦況</h3>
     <p class="note">重要度に対して力が足りていない省ほど、右下に落ちる</p>
@@ -210,7 +235,7 @@
 
   <section class="panel full">
     <h3>成長率</h3>
-    <p class="note">前回からどれだけ伸びたか。絶対値より勢いが見える</p>
+    <p class="note">選んだ期間のはじめから、どれだけ伸びたか(%)</p>
     <div class="canvas-box" id="box-growth"><canvas id="ch-growth"></canvas></div>
   </section>
 
@@ -339,11 +364,99 @@ const BOARD = document.getElementById("board").innerHTML;
 const lsGet = (k, fb) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch (e) { return fb; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
+
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ───── 見る期間 ───── */
+const KEY_RANGE = "kokuryoku-range";
+function rangeOf(d){
+  const dates = (d.power_history || []).map(r => r.date);
+  if (!dates.length) return null;
+  const r = lsGet(KEY_RANGE, { mode: "30" });
+  const lastD = dates[dates.length - 1], firstD = dates[0];
+  let to = r.mode === "custom" && r.to ? r.to : lastD, from;
+  if (r.mode === "custom" && r.from) from = r.from;
+  else if (r.mode === "all") from = firstD;
+  else from = new Date(Date.parse(to + "T00:00:00Z") - (+r.mode) * 864e5).toISOString().slice(0, 10);
+  if (from < firstD) from = firstD;
+  return { from, to, mode: r.mode };
+}
+function cut(list, R){ return (list || []).filter(x => x.date >= R.from && x.date <= R.to); }
+function cumulative(list, key){
+  if (!list.length) return [];
+  const base = list[0][key];
+  return list.map(x => ({ date: x.date, rate: base > 0 ? Math.round((x[key] - base) / base * 1000) / 10 : null }));
+}
+function inRange(d){
+  const R = rangeOf(d); if (!R) return { d, R: null };
+  const ph = cut(d.power_history, R), wh = cut(d.wealth_history, R);
+  return { R, d: Object.assign({}, d, { power_history: ph, growth: { power: cumulative(ph, "power"), wealth: cumulative(wh, "value") } }) };
+}
+function renderRange(R){
+  const r = lsGet(KEY_RANGE, { mode: "30" });
+  document.querySelectorAll("[data-range]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.range === r.mode)));
+  if (R) { document.getElementById("r-from").value = R.from; document.getElementById("r-to").value = R.to; }
+}
+
+/* ───── 何が国力を動かしたか ─────
+   省ごとの国力 = 領土 × 支配 × 重要度 ÷ 100 + 国富。
+   はじめとおわりの差を、掛け算の3つ(領土・支配・重要度)は順番によらず公平に割り振り(シャープレイ値)、残りを国富とする。 */
+const nameOfTag = t => /省$/.test(t) ? t : t + "省";
+function attribution(d, R){
+  const mh = (d.ministry_history || []).filter(x => x.date >= R.from && x.date <= R.to);
+  if (!mh.length) return null;
+  const dates = Array.from(new Set(mh.map(x => x.date))).sort();
+  const S = dates[0], E = dates[dates.length - 1];
+  const at = day => { const m = {}; mh.filter(x => x.date === day).forEach(x => m[x.tag] = x); return m; };
+  const A = at(S), B = at(E), tags = Array.from(new Set(Object.keys(A).concat(Object.keys(B))));
+  const z = { territory: 0, dominance: 0, weight: 0, power: 0 };
+  const rows = tags.map(tag => {
+    const a = A[tag] || z, b = B[tag] || z;
+    const T0 = a.territory, D0 = a.dominance, W0 = a.weight, T1 = b.territory, D1 = b.dominance, W1 = b.weight;
+    const sh = (dx, y0, z0, y1, z1) => dx * (y0 * z0 / 3 + (y0 * z1 + y1 * z0) / 6 + y1 * z1 / 3) / 100;
+    const fT = sh(T1 - T0, D0, W0, D1, W1), fD = sh(D1 - D0, T0, W0, T1, W1), fW = sh(W1 - W0, T0, D0, T1, D1);
+    const wl0 = a.power - T0 * D0 * W0 / 100, wl1 = b.power - T1 * D1 * W1 / 100;
+    return { tag, total: b.power - a.power, parts: [["領土", fT], ["支配", fD], ["重要度", fW], ["国富", wl1 - wl0]], dT: T1 - T0, dD: D1 - D0, dW: W1 - W0 };
+  }).sort((x, y) => Math.abs(y.total) - Math.abs(x.total));
+  return { S, E, rows };
+}
+const RANK = { "要再設定": 0, "新規": 1, "進行中": 2, "定着": 3, "熟達": 4, "殿堂入り": 5 };
+function renderCauses(d, R){
+  const box = document.getElementById("causes"); if (!box) return;
+  const at = R && attribution(d, R);
+  if (!at || at.S === at.E) { box.innerHTML = '<div class="note">この期間には、比べられる2日分の記録がありません。期間を広げてください。</div>'; return; }
+  const sum = at.rows.reduce((s, r) => s + r.total, 0);
+  const allParts = []; at.rows.forEach(r => r.parts.forEach(([k, v]) => allParts.push({ tag: r.tag, k, v })));
+  allParts.sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+  const top = allParts[0], sg = v => (v >= 0 ? "+" : "") + v.toFixed(1);
+  const why = { "領土": "動いているタスクの数", "支配": "タスクの定着度(連続・状況・世代)", "重要度": "依存関係・時勢・参謀本部の重点", "国富": "達成して残った成果" };
+  let h = '<p class="summary">' + esc(at.S) + " から " + esc(at.E) + " までで、総国力は <b class=\"" + (sum >= 0 ? "pos" : "neg") + "\">" + sg(sum) + "</b>。" +
+    (top && Math.abs(top.v) >= 0.05 ? "いちばん効いたのは<b>" + esc(nameOfTag(top.tag)) + "の" + top.k + "(" + sg(top.v) + ")</b>で、" + why[top.k] + "の変化によるものです。" : "") + "</p>";
+  h += at.rows.filter(r => Math.abs(r.total) >= 0.05 || r.parts.some(p => Math.abs(p[1]) >= 0.05)).map(r =>
+    '<div class="cause"><span class="cn">' + esc(nameOfTag(r.tag)) + '</span><span class="cv ' + (r.total >= 0 ? "pos" : "neg") + '">' + sg(r.total) + '</span><span class="cf">' +
+      r.parts.filter(p => Math.abs(p[1]) >= 0.05).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).map(p => '<span class="' + (p[1] >= 0 ? "pos" : "neg") + '">' + p[0] + " " + sg(p[1]) + "</span>").join("") +
+      (r.dT ? '<span>領土 ' + (r.dT > 0 ? "+" : "") + r.dT + "件</span>" : "") + (Math.abs(r.dD) >= 0.5 ? "<span>支配 " + (r.dD > 0 ? "+" : "") + r.dD.toFixed(0) + "点</span>" : "") +
+      "</span></div>").join("");
+  // その期間に状況が変わったタスク(原因の中身)
+  const ch = (d.task_changes || []).filter(x => x.date > at.S && x.date <= at.E);
+  const up = ch.filter(x => (RANK[x.to] ?? -1) > (RANK[x.from] ?? -1) && RANK[x.to] != null && RANK[x.from] != null);
+  const down = ch.filter(x => RANK[x.to] != null && RANK[x.from] != null && RANK[x.to] < RANK[x.from]);
+  const other = ch.filter(x => !(up.includes(x) || down.includes(x)));
+  const list = (xs, title) => xs.length ? '<details class="fold"' + (xs.length <= 8 ? " open" : "") + "><summary>" + title + " " + xs.length + "件</summary>" +
+    xs.slice().reverse().map(x => '<div class="tchg"><span>' + esc(x.task) + "　" + esc(x.from) + " → " + esc(x.to) + "</span><span>" + esc((x.tags || []).map(nameOfTag).join("・")) + "　" + esc(x.date.slice(5)) + "</span></div>").join("") + "</details>" : "";
+  h += '<h4 style="margin:1rem 0 .3rem">この期間に状況が変わったタスク</h4>' + (ch.length ? list(up, "上がった") + list(down, "落ちた") + list(other, "休止・アーカイブなど")
+    : '<div class="note">状況が変わったタスクはありませんでした。</div>');
+  box.innerHTML = h;
+}
+
 function show(d){
   // 描き直すたびに盤面を作り直す(グラフを重ねて描かないため)
   if (window.Chart && Chart.instances) Object.values(Chart.instances).forEach(c => { try { c.destroy(); } catch (e) {} });
   document.getElementById("board").innerHTML = BOARD;
-  draw(d);
+  const v = inRange(d);
+  renderRange(v.R);
+  draw(v.d);
+  renderCauses(d, v.R);
 }
 
 function b64utf8(b64){
@@ -394,6 +507,15 @@ async function load(){
   document.getElementById("open-conn").addEventListener("click", () => {
     const p = document.getElementById("conn"); p.hidden = !p.hidden;
   });
+  document.getElementById("range").addEventListener("click", e => {
+    const b = e.target.closest("[data-range]"); if (!b) return;
+    lsSet(KEY_RANGE, { mode: b.dataset.range });
+    const c = lsGet(KEY_CACHE, null); if (c) show(c);
+  });
+  ["r-from", "r-to"].forEach(id => document.getElementById(id).addEventListener("change", () => {
+    lsSet(KEY_RANGE, { mode: "custom", from: document.getElementById("r-from").value, to: document.getElementById("r-to").value });
+    const c = lsGet(KEY_CACHE, null); if (c) show(c);
+  }));
   document.getElementById("reload").addEventListener("click", () => {
     document.getElementById("stamp").textContent = "読み込み中";
     load();
@@ -419,9 +541,9 @@ function draw(d){
     const last = hist[hist.length-1];
     document.getElementById('power-now').textContent = last.power.toFixed(1);
     if (hist.length > 1) {
-      const diff = last.power - hist[hist.length-2].power;
+      const first = hist[0], diff = last.power - first.power, pct = first.power > 0 ? diff / first.power * 100 : null;
       const el = document.getElementById('power-delta');
-      el.textContent = (diff>=0?'前回比 +':'前回比 ') + diff.toFixed(1);
+      el.textContent = '期間中 ' + (diff >= 0 ? '+' : '') + diff.toFixed(1) + (pct != null ? '(' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%)' : '');
       el.classList.add(diff>=0 ? 'up' : 'down');
     }
     var rules = d.rules || [];
