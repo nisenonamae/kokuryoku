@@ -235,7 +235,7 @@
       <button type="button" data-cmp="custom">期間を選ぶ</button>
       <span id="cmp-dates" hidden><input type="date" id="c-from" aria-label="はじめ"> 〜 <input type="date" id="c-to" aria-label="おわり"></span>
     </div>
-    <p class="note" id="cause-note">はじめとおわりを比べ、省ごとの増減を、領土・支配・重要度・国富に割り振っています</p>
+    <p class="note" id="cause-note">はじめとおわりを比べ、国力の増減を、タスク1つずつ・重要度・国富に割り振っています</p>
     <div id="causes"></div>
   </section>
 
@@ -467,6 +467,58 @@ function attribution(d, R){
   }).sort((x, y) => Math.abs(y.total) - Math.abs(x.total));
   return { S, E, rows };
 }
+
+/* ───── タスクまで割り振る ─────
+   省の国力 = 重要度 ÷ 100 × (タスクの点の合計) + 国富。点 = 重み × 定着度(国力の計算と同じ)。
+   2つの日の差を、タスク1つずつ・重要度・国富に割り振る(2つの掛け算は平均で公平に分ける)。 */
+function taskAttribution(d, S, E){
+  const ts = d.task_scores; if (!ts || !ts.days || !ts.days[S] || !ts.days[E]) return null;
+  const ptsAt = day => { const m = {}; (ts.days[day] || []).forEach(([i, p]) => m[ts.names[i]] = p); return m; };
+  const p0 = ptsAt(S), p1 = ptsAt(E);
+  const mh = d.ministry_history || [], at = day => { const m = {}; mh.filter(x => x.date === day).forEach(x => m[x.tag] = x); return m; };
+  const A = at(S), B = at(E), tags = Array.from(new Set(Object.keys(A).concat(Object.keys(B))));
+  const changes = (d.task_changes || []).filter(x => x.date > S && x.date <= E);
+  const reason = (name, a, b) => { const c = changes.filter(x => x.task === name).pop();
+    if (c) return c.from + "→" + c.to; if (!a && b) return "加わった"; if (a && !b) return "外れた"; return b > a ? "定着度が上がった" : "定着度が下がった"; };
+  const byTask = {};
+  const rows = tags.map(tag => {
+    const a = A[tag] || { weight: 0, power: 0 }, b = B[tag] || { weight: 0, power: 0 };
+    const names = Object.keys(ts.tags).filter(n => (ts.tags[n] || []).includes(tag) && (p0[n] || p1[n]));
+    const s0 = names.reduce((x, n) => x + (p0[n] || 0), 0), s1 = names.reduce((x, n) => x + (p1[n] || 0), 0);
+    const wAvg = (a.weight + b.weight) / 2;
+    const tasks = names.map(n => ({ name: n, v: ((p1[n] || 0) - (p0[n] || 0)) * wAvg / 100, why: reason(n, p0[n] || 0, p1[n] || 0) }))
+      .filter(x => Math.abs(x.v) >= 0.005).sort((x, y) => Math.abs(y.v) - Math.abs(x.v));
+    const wPart = (b.weight - a.weight) * (s0 + s1) / 2 / 100;
+    const total = b.power - a.power, wealth = total - tasks.reduce((x, t) => x + t.v, 0) - wPart;
+    tasks.forEach(t => { const k = t.name; (byTask[k] = byTask[k] || { name: k, v: 0, why: t.why, tags: [] }).v += t.v; byTask[k].tags.push(tag); });
+    return { tag, total, tasks, wPart, wealth };
+  }).sort((x, y) => Math.abs(y.total) - Math.abs(x.total));
+  return { S, E, rows, tasks: Object.values(byTask).sort((x, y) => y.v - x.v) };
+}
+function renderTaskCauses(box, d, at){
+  const ta = taskAttribution(d, at.S, at.E); if (!ta) return false;
+  const sg = v => (v >= 0 ? "+" : "") + v.toFixed(1), sum = ta.rows.reduce((x, r) => x + r.total, 0);
+  const cand = []; ta.tasks.forEach(t => cand.push({ label: t.name + "(" + t.why + ")", v: t.v }));
+  ta.rows.forEach(r => { cand.push({ label: nameOfTag(r.tag) + "の重要度", v: r.wPart }); cand.push({ label: nameOfTag(r.tag) + "の国富", v: r.wealth }); });
+  cand.sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+  const top = cand[0];
+  let h = '<p class="summary">' + esc(at.S) + " から " + esc(at.E) + " までで、総国力は <b class=\"" + (sum >= 0 ? "pos" : "neg") + "\">" + sg(sum) + "</b>。" +
+    (top && Math.abs(top.v) >= 0.05 ? "いちばん効いたのは<b>" + esc(top.label) + "</b>の " + sg(top.v) + " です。" : "") + "</p>";
+  const pos = ta.tasks.filter(t => t.v >= 0.05).slice(0, 5), neg = ta.tasks.filter(t => t.v <= -0.05).reverse().slice(0, 5);
+  const tl = (xs, title) => xs.length ? "<h4 style=\"margin:.6rem 0 .2rem\">" + title + "</h4>" + xs.map(t => '<div class="tchg"><span>' + esc(t.name) + '　<b class="' + (t.v >= 0 ? "pos" : "neg") + '">' + sg(t.v) + "</b></span><span>" +
+    esc(t.why) + "　" + esc(t.tags.map(nameOfTag).join("・")) + "</span></div>").join("") : "";
+  h += tl(pos, "国力を押し上げたタスク") + tl(neg, "国力を押し下げたタスク");
+  h += '<h4 style="margin:1rem 0 .2rem">省ごとの内訳</h4>' + ta.rows.filter(r => Math.abs(r.total) >= 0.05).map(r => {
+    const chips = r.tasks.slice(0, 3).map(t => '<span class="' + (t.v >= 0 ? "pos" : "neg") + '">' + esc(t.name) + " " + sg(t.v) + "(" + esc(t.why) + ")</span>");
+    const rest = r.tasks.slice(3); if (rest.length) { const rv = rest.reduce((x, t) => x + t.v, 0); chips.push("<span>ほか" + rest.length + "件 " + sg(rv) + "</span>"); }
+    if (Math.abs(r.wPart) >= 0.05) chips.push('<span class="' + (r.wPart >= 0 ? "pos" : "neg") + '">重要度 ' + sg(r.wPart) + "</span>");
+    if (Math.abs(r.wealth) >= 0.05) chips.push('<span class="' + (r.wealth >= 0 ? "pos" : "neg") + '">国富 ' + sg(r.wealth) + "</span>");
+    return '<div class="cause"><span class="cn">' + esc(nameOfTag(r.tag)) + '</span><span class="cv ' + (r.total >= 0 ? "pos" : "neg") + '">' + sg(r.total) + '</span><span class="cf">' + chips.join("") + "</span></div>";
+  }).join("");
+  box.innerHTML = h;
+  return true;
+}
+
 const RANK = { "要再設定": 0, "新規": 1, "進行中": 2, "定着": 3, "熟達": 4, "殿堂入り": 5 };
 function renderCauses(d, R){
   const box = document.getElementById("causes"); if (!box) return;
@@ -476,6 +528,7 @@ function renderCauses(d, R){
   if (days < 2) { box.innerHTML = '<div class="note">国力の記録がまだ' + days + '日分しかありません。毎朝の計算で1日ずつ増えていき、2日分そろうと比べられます。</div>'; return; }
   const at = R && attribution(d, R);
   if (!at || at.S === at.E) { box.innerHTML = '<div class="note">この期間には、比べられる2日分の記録がありません。期間を広げてください。</div>'; return; }
+  if (renderTaskCauses(box, d, at)) return;     // タスクごとの点があれば、タスクまで割り振る
   const sum = at.rows.reduce((s, r) => s + r.total, 0);
   const allParts = []; at.rows.forEach(r => r.parts.forEach(([k, v]) => allParts.push({ tag: r.tag, k, v })));
   allParts.sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
