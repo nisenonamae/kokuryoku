@@ -63,6 +63,9 @@
   .nrow{margin:.2rem 0 .5rem}
   .nplace{display:flex;gap:.6rem;align-items:baseline;padding:.35rem 0;border-bottom:1px dashed var(--rule);flex-wrap:wrap}
   .nplace span{font-size:.8rem;color:var(--muted)}
+  .pw-kind{font-size:.7rem;font-weight:400;color:var(--muted);margin-left:.4rem;letter-spacing:.05em}
+  .pw-sub{font-size:.8rem;color:var(--muted);margin-top:.2rem}.pw-sub b{color:var(--text)}
+  .pw-help{display:block;font-size:.72rem;margin-top:.15rem}
   .fold>summary{cursor:pointer;color:var(--muted);font-size:.86rem;padding:.3rem 0}
   .summary{font-size:.95rem;line-height:1.7;margin:.2rem 0 .8rem}
   .tools{display:flex;gap:.5rem;justify-content:flex-end;margin:-.6rem 0 1rem}
@@ -223,9 +226,10 @@
 
   <section data-tab="国力" class="hero">
     <div class="hero-head">
-      <h2>総国力</h2>
+      <h2>総国力<small class="pw-kind">実質</small></h2>
       <div class="figure" id="power-now">—</div>
       <div class="delta" id="power-delta"></div>
+      <div class="pw-sub" id="power-sub"></div>
       <div class="aside">
         <span class="aside-label">国富</span>
         <span class="aside-figure" id="wealth-now">—</span>
@@ -444,7 +448,7 @@ function cumulative(list, key){
 function inRange(d){
   const R = rangeOf(d); if (!R) return { d, R: null };
   const ph = cut(d.power_history, R), wh = cut(d.wealth_history, R);
-  return { R, d: Object.assign({}, d, { power_history: ph, growth: { power: cumulative(ph, "power"), wealth: cumulative(wh, "value") } }) };
+  return { R, d: Object.assign({}, d, { power_history: ph, growth: { power: cumulative(ph, (ph || []).some(r => r.real != null) ? "real" : "power"), wealth: cumulative(wh, "value") } }) };
 }
 function renderRange(R){
   const r = lsGet(KEY_RANGE, { mode: "30" });
@@ -669,9 +673,17 @@ function draw(d){
   const hist = d.power_history || [];
   if (hist.length) {
     const last = hist[hist.length-1];
-    document.getElementById('power-now').textContent = last.power.toFixed(1);
+    // 実質国力(重要度の膨らみを取り除いた国力)を主に、名目と物価も並べる。前の形の集計なら名目だけ
+    const R = r => (r.real != null ? r.real : r.power);
+    document.getElementById('power-now').textContent = R(last).toFixed(1);
+    if (last.real != null) {
+      const p0 = hist[0].price || 1, pc = ((last.price || 1) / p0 - 1) * 100;
+      document.getElementById('power-sub').innerHTML = '名目 <b>' + last.power.toFixed(1) + '</b>　重要度の物価 <b>' + (last.price || 1).toFixed(3) + '</b>' +
+        (hist.length > 1 ? '(期間中 ' + (pc >= 0 ? '+' : '') + pc.toFixed(1) + '%)' : '') +
+        '<span class="pw-help">実質は、重要度の合計の膨らみ(時勢など)を取り除いた国力。省を足した分は本当の伸びとして数えます。</span>';
+    }
     if (hist.length > 1) {
-      const first = hist[0], diff = last.power - first.power, pct = first.power > 0 ? diff / first.power * 100 : null;
+      const first = hist[0], diff = R(last) - R(first), pct = R(first) > 0 ? diff / R(first) * 100 : null;
       const el = document.getElementById('power-delta');
       el.textContent = '期間中 ' + (diff >= 0 ? '+' : '') + diff.toFixed(1) + (pct != null ? '(' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%)' : '');
       el.classList.add(diff>=0 ? 'up' : 'down');
@@ -691,7 +703,8 @@ function draw(d){
     new Chart(document.getElementById('ch-power'), {
       type:'line',
       data:{ labels: hist.map(r=>r.date.slice(5)), datasets:[{
-        data: hist.map(r=>r.power),
+        label: hist.some(r => r.real != null) ? '実質' : '国力',
+        data: hist.map(r => r.real != null ? r.real : r.power),
         borderColor: C.brass,
         backgroundColor:'rgba(201,162,39,.10)',
         borderWidth:2, fill:true, tension:.25,
@@ -700,12 +713,17 @@ function draw(d){
         pointBorderColor: segColors,
         segment:{ borderColor: function(ctx){
           return segColors[ctx.p1DataIndex] || C.brass; } }
-      }]},
+      }].concat(hist.some(r => r.real != null) ? [{
+        label: '名目',
+        data: hist.map(r => r.power),
+        borderColor: 'rgba(120,120,120,.75)', backgroundColor: 'transparent',
+        borderWidth: 1.5, borderDash: [5, 4], fill: false, tension: .25, pointRadius: 0
+      }] : [])},
       options:{ responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{display:false},
+        plugins:{ legend:{display: hist.some(r => r.real != null), labels:{ boxWidth:14, font:{ size:11 } } },
           tooltip:{callbacks:{afterLabel:function(c){
-            var h = ruleAt(hist[c.dataIndex].date);
-            return h ? h.version : '';
+            var r0 = hist[c.dataIndex], h = ruleAt(r0.date);
+            return (c.datasetIndex === 0 && r0.price ? '物価 ' + r0.price.toFixed(3) + '  ' : '') + (h ? h.version : '');
           }}} },
         scales:axes() },
       plugins:[{
