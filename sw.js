@@ -1,39 +1,23 @@
-/*
-  国力年報の Service Worker。
-  Chromeがアプリとしてインストールできるようにするためのもの。
-  通信できるときは必ずネットから最新を取る(新しい版がすぐ反映される)。
-  通信できないときだけ、前に開いたときの画面を出す。
-  GitHubのAPIなど、よそのサイトへの通信には触れない。
-*/
-const CACHE = "kokuryoku-shell-v1";
-const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
-
-self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => {}));
-  self.skipWaiting();
+// 国力年報のサービスワーカー:つながるときは必ず最新を取りに行き、つながらないときだけ手元の保存を使う
+// 同じ nisenonamae.github.io のほかのアプリの保存には手を出さない(自分の場所の古い保存だけを消す)
+const CACHE = "kokuryoku-k6";
+self.addEventListener("install", e => { self.skipWaiting(); });
+self.addEventListener("activate", e => {
+  e.waitUntil((async () => {
+    const scope = self.registration.scope;
+    for (const k of await caches.keys()) {
+      if (k === CACHE) continue;
+      const c = await caches.open(k), reqs = await c.keys();
+      if (reqs.length && reqs.every(r => r.url.startsWith(scope))) await caches.delete(k);   // 自分の場所だけの保存なら消す
+    }
+    await self.clients.claim();
+  })());
 });
-
-self.addEventListener("activate", event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener("fetch", event => {
-  const req = event.request;
-  if (req.method !== "GET") return;
-  if (new URL(req.url).origin !== self.location.origin) return;   // GitHubのAPIなどはそのまま通す
-  event.respondWith(
-    fetch(req)
-      .then(res => {
-        if (res && res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
-        }
-        return res;
-      })
-      .catch(() => caches.match(req).then(hit => hit || caches.match("./index.html")))
-  );
+self.addEventListener("fetch", e => {
+  const req = e.request; if (req.method !== "GET") return;
+  const url = new URL(req.url); if (url.origin !== location.origin || !req.url.startsWith(self.registration.scope)) return;
+  e.respondWith((async () => {
+    try { const res = await fetch(req, { cache: "no-store" }); if (res.ok) { const c = await caches.open(CACHE); c.put(req, res.clone()); } return res; }
+    catch (err) { const hit = await caches.match(req); if (hit) return hit; throw err; }
+  })());
 });
