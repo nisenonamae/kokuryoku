@@ -153,6 +153,16 @@ svg text{font-family:"Zen Kaku Gothic New","Hiragino Sans",sans-serif}
 .gv-x{text-align:right;font-weight:700}.gv-c{text-align:right;font-size:.78rem}
 .gv-l{grid-column:1/-1;font-size:.72rem;color:var(--sub)}
 nav.tabs button{font-size:.92rem}
+/* 威信 */
+.pct{font-size:.42em;font-weight:500;color:var(--sub);margin-left:.35em;letter-spacing:0}
+.gv-x .pct{font-size:.72em;display:block;margin:0;line-height:1}
+.pm-sw{display:flex;flex-wrap:wrap;gap:.2rem .9rem;align-items:baseline;font-size:.86rem;font-weight:700;margin-top:.15rem}.pm-sw small{font-weight:400;font-size:.72rem;color:var(--sub)}
+.psub{margin:.1rem 0 .5rem}
+.pre-by{margin-top:.6rem}.pre-by .cr-n{white-space:normal}.pre-by .cr-n em{display:block;font-style:normal;font-size:.7rem;color:var(--sub);border:0;padding:0;margin:0}
+.pm{padding:.45rem 0;border-top:1px dashed var(--rule)}.pm:first-of-type{border-top:0}
+.pm-h{display:flex;align-items:baseline;gap:.45rem}.pm-h b{flex:1;min-width:0;font-size:.9rem}
+.pm-k{font-size:.7rem;border-radius:3px;padding:0 .35rem;border:1px solid}.pm-k.k1{color:var(--wave);border-color:var(--wave)}.pm-k.k2{color:var(--sub);border-color:var(--rule)}
+.pm-d{font-weight:700}.pm-s{font-size:.74rem;color:var(--sub);margin-top:.1rem}
 /* 時間 */
 .tasks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.5rem}
 .tk{border:1px solid var(--rule);border-radius:5px;padding:.4rem .55rem;background:#fff}
@@ -195,6 +205,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 @media (max-width:520px){ .pillars{grid-template-columns:1fr 1fr} .pillars .pillar:first-child{grid-column:1/-1} }
 @media (prefers-reduced-motion:no-preference){ .draw{stroke-dasharray:2400;stroke-dashoffset:2400;animation:draw 1s ease-out forwards} @keyframes draw{to{stroke-dashoffset:0}} }
 </style>
+<style>.se-row{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.5rem 0;font-size:.86rem}.se-btn{min-width:2.6rem;border:1px solid #bbb;border-radius:999px;background:#fff;padding:.1rem .7rem;font:inherit;cursor:pointer}.se-btn[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}.se-vol{display:flex;align-items:center;gap:.3rem}.se-vol input{width:8rem}</style>
 </head>
 <body>
 <div class="wrap">
@@ -219,15 +230,18 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 </div>
 
 <nav class="tabs" role="tablist">
-  <button role="tab" data-tab="国力">国力</button><button role="tab" data-tab="統治">統治</button><button role="tab" data-tab="要因">要因</button><button role="tab" data-tab="省">省</button><button role="tab" data-tab="時間">時間</button><button role="tab" data-tab="設定">設定</button>
+  <button role="tab" data-tab="国力">国力</button><button role="tab" data-tab="統治">統治</button><button role="tab" data-tab="威信">威信</button><button role="tab" data-tab="省">省</button><button role="tab" data-tab="時間">時間</button><button role="tab" data-tab="設定">設定</button>
 </nav>
 <script>
 "use strict";
 /* 国力年報:毎朝の集計(docs/data/stats.json)を、非公開のリポジトリからトークンで読み、盤面に描く。
    図はすべて SVG で自前に描く(外の図の道具は使わない) */
-const APP_VERSION = "2026-10-20 k6";
+const APP_VERSION = "2026-10-20 k12";
 const KEY_CONN = "kokuryoku-conn", KEY_CACHE = "kokuryoku-cache", KEY_TAB = "kokuryoku-tab", KEY_CMP = "kokuryoku-cmp", KEY_RANGE = "kokuryoku-range";
 const STATS_PATH = "docs/data/stats.json";
+const GOV_PATH = "roadmap/gov/governance.json";   // 統治の計算の結果(行軍表が書き出す)
+const PRE_PATH = "roadmap/gov/prestige.json";     // 威信の計算の結果(行軍表が書き出す)
+const KEY_PSUB = "kokuryoku-psub";
 const lsGet = (k, fb) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch (e) { return fb; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -393,6 +407,11 @@ function boardSvg(fr, sel){
 /* ───── 統治:場面ごとに、株価のように値が動く ─────
    ○なら 値 + (100 − 値) × 割合、×なら 値 − 値 × 割合。割合 = そのタスクの重み ÷ 全タスクの重み。
    要素ごと・防復・安寧・統治が、それぞれ同じ出来事から別々に動く(足し合わせる比率は使わない) */
+// 格:割合を威信と同じEloの目盛りに直したもの(0 が五分五分、マイナスは崩れるほうが多い=荒れている)
+const gradeOf = v => v == null ? null : Math.round(400 * Math.log10(Math.max(1e-6, Math.min(100 - 1e-6, v)) / (100 - Math.max(1e-6, Math.min(100 - 1e-6, v)))));
+const gtxt = g => g == null ? "—" : (g > 0 ? "+" : g < 0 ? "−" : "") + Math.abs(g);
+// 威信の割合:五分五分の挑戦(ふつうの人が半々で成功する難しさ)を、今の自分が成し遂げられる見込み
+const prePct = r => r == null ? null : 100 / (1 + Math.pow(10, -r / 400));
 const GOV_EL = { "防復": ["被害を抑える", "初動", "修復", "補填"], "安寧": ["継続", "立ち直り", "取り戻し", "要石", "先回り"] };
 function computeGov(raw){
   if (!raw || !raw.days) return null;
@@ -400,7 +419,7 @@ function computeGov(raw){
   const totalW = Object.values(W).reduce((a, b) => a + b, 0) || 1, share = n => (W[n] || 1) / totalW;
   const keys = ["統治", "防復", "安寧"].concat(GOV_EL["防復"], GOV_EL["安寧"]), val = {}, series = {}, scenes = [];
   keys.forEach(k => { val[k] = null; series[k] = []; });
-  const move = (k, ok, r) => { if (val[k] == null) { val[k] = ok ? 100 : 0; return; } val[k] = ok ? val[k] + (100 - val[k]) * r : val[k] - val[k] * r; };
+  const move = (k, ok, r) => { if (val[k] == null) val[k] = 50; r = Math.min(0.999, r); val[k] = ok ? val[k] + (100 - val[k]) * r : val[k] - val[k] * r; };
   const scene = (d, el, ok, r, what) => { const grp = GOV_EL["防復"].includes(el) ? "防復" : "安寧"; move(el, ok, r); move(grp, ok, r); move("統治", ok, r); scenes.push({ d, el, grp, ok, what, r }); };
   const prev = {}, deficit = {}, missRun = {};
   dates.forEach(d => {
@@ -454,8 +473,11 @@ function render(){
   const box = $("board");
   if (!DATA) { box.innerHTML = t === "設定" ? settingsHtml(null) : (noConn ? "" : '<div class="empty">読み込み中…</div>'); return; }
   renderMast(DATA);
-  if (DATA.gov_raw && !DATA.__gov) { DATA.__gov = computeGov(DATA.gov_raw); const G = DATA.__gov; if (G) DATA.governance = { value: G.val["統治"], bofuku: G.val["防復"] != null ? G.val["防復"].toFixed(0) : "—", annei: G.val["安寧"] != null ? G.val["安寧"].toFixed(0) : "—" }; }
-  box.innerHTML = ({ "国力": powerTab, "統治": govTab, "要因": causesTab, "省": ministriesTab, "時間": timeTab, "設定": settingsHtml }[t] || powerTab)(DATA);
+  if (DATA.gov_file && !DATA.__gov && DATA.gov_file.series) { const F = DATA.gov_file; DATA.__gov = { dates: F.dates || [], series: F.series, val: F.val || {}, scenes: F.scenes || [] };
+    DATA.governance = { value: F.val["統治"] }; }
+  if (DATA.pre_file && DATA.pre_file.rating != null) DATA.prestige = { value: DATA.pre_file.rating, by: DATA.pre_file.byKind || {} };
+  if (DATA.gov_raw && !DATA.__gov) { DATA.__gov = computeGov(DATA.gov_raw); const G = DATA.__gov; if (G) DATA.governance = { value: G.val["統治"] }; }
+  box.innerHTML = ({ "国力": powerTab, "統治": govTab, "威信": preTab, "要因": causesTab, "省": ministriesTab, "時間": timeTab, "設定": settingsHtml }[t] || powerTab)(DATA);
 }
 function renderMast(d){
   const era = d.era || null, ph = d.power_history || [];
@@ -466,6 +488,9 @@ function renderMast(d){
 
 /* 国力のタブ:三つの柱・国力の推移・動いた省 */
 function powerTab(d){
+  const sub = lsGet(KEY_PSUB, "推移");
+  const subSw = '<div class="chips psub">' + ["推移", "要因"].map(x => '<button type="button" data-psub="' + x + '" aria-pressed="' + (sub === x) + '">' + x + "</button>").join("") + "</div>";
+  if (sub === "要因") return subSw + causesTab(d);
   const R = rangeOf(d), hist = R ? cut(d.power_history, R) : [];
   let h = "";
   // 三つの柱
@@ -477,11 +502,12 @@ function powerTab(d){
       (hist.length > 2 ? spark(hist.map(realOf), { area: true, color: COL.gold, cls: "psp", w: 200, h: 34 }) : "") +
       (diff != null && hist.length > 1 ? '<div class="d ' + (diff >= 0 ? "up" : "down") + '">期間中 ' + sg(diff) + (pct != null ? "(" + sg(pct) + "%)" : "") + "</div>" : "") +
       '<div class="s">今の毎日の行動の価値' + (last && last.real != null ? "(実質)" : "") + "</div></div>" +
-    (gov && gov.value != null ? '<div class="pillar" data-go="統治" style="cursor:pointer"><h2>統治 ›</h2><div class="v num">' + (+gov.value).toFixed(0) + '</div><div class="s">防復 ' + esc(gov.bofuku ?? "—") + " ・ 安寧 " + esc(gov.annei ?? "—") + "</div></div>"
+    (gov && gov.value != null ? (() => { const G = d.__gov || { val: {} }, g = gradeOf(+gov.value);
+      return '<div class="pillar" data-go="統治" style="cursor:pointer"><h2>統治 ›</h2><div class="v num ' + (g < 0 ? "down" : "") + '">' + gtxt(g) + '<small class="pct">' + (+gov.value).toFixed(0) + '%</small></div><div class="s">防復 ' + gtxt(gradeOf(G.val["防復"])) + " ・ 安寧 " + gtxt(gradeOf(G.val["安寧"])) + "</div></div>"; })()
       : '<div class="pillar wait"><h2>統治</h2><div class="v num">—</div><div class="s">防衛省の守りから測る</div><div class="parts"><span>防復</span><span>安寧</span></div></div>') +
-    (pre && pre.value != null ? '<div class="pillar"><h2>威信</h2><div class="v num">' + (+pre.value).toFixed(0) + '</div><div class="s">' + esc(pre.title || "") + "</div></div>"
+    (pre && pre.value != null ? '<div class="pillar" data-go="威信" style="cursor:pointer"><h2>威信 ›</h2><div class="v num ' + (+pre.value < 0 ? "down" : "") + '">' + sg(+pre.value, 0) + '<small class="pct">' + prePct(+pre.value).toFixed(0) + '%</small></div><div class="s">偉業 ' + sg(+(pre.by || {}).偉業 || 0, 0) + " ・ 信用 " + sg(+(pre.by || {}).信用 || 0, 0) + "</div></div>"
       : '<div class="pillar wait"><h2>威信</h2><div class="v num">—</div><div class="s">偉業への挑戦の戦績から測る</div><div class="parts"><span>準備中</span></div></div>') +
-    "</div>";
+    "</div>" + subSw;
   // 国力の推移
   const r = lsGet(KEY_RANGE, { mode: "30" });
   h += '<section class="sect"><h3>国力の推移</h3><div class="chips" data-chips="range">' +
@@ -513,19 +539,42 @@ function govTab(d){
   if (!G) return '<section class="sect"><h3>統治</h3><div class="empty">統治の計算はまだ始まっていません。行軍表の記録(要石・偵察・崩れ)と、防衛省のALERTがそろうと、毎朝ここに出ます。</div></section>';
   const R = rangeOf(d), i0 = Math.max(0, G.dates.findIndex(x => x >= (R ? R.from : G.dates[0]))), sl = k => G.series[k].slice(i0);
   const v = k => G.val[k], chg = k => { const a = sl(k).find(x => x != null), b = v(k); return a != null && b != null ? b - a : null; };
-  const big = k => { const c = chg(k); return '<div class="gv-v num">' + (v(k) != null ? v(k).toFixed(0) : "—") + "</div>" + (c != null ? '<div class="d ' + (c >= 0 ? "up" : "down") + '">期間中 ' + sg(c) + "</div>" : ""); };
-  let h = '<section class="sect gv-top"><h3>統治<small>危うい場面を乗り切る力。上限100</small></h3><div class="gv-head">' + big("統治") + spark(sl("統治"), { area: true, cls: "gv-sp", w: 260, h: 44 }) + "</div>" +
-    '<div class="gv-two">' + ["防復", "安寧"].map(g => '<div class="gv-g"><b>' + g + "</b><small>" + (g === "防復" ? "外:攻められたときの力" : "内:安心して事を進める力") + "</small>" + big(g) + spark(sl(g), { area: true, h: 30 }) + "</div>").join("") + "</div></section>";
+  const gchg = k => { const a = sl(k).find(x => x != null), b = v(k); return a != null && b != null ? gradeOf(b) - gradeOf(a) : null; };
+  const big = k => { const c = gchg(k), g = gradeOf(v(k)); return '<div class="gv-v num ' + (g < 0 ? "down" : "") + '">' + gtxt(g) + '<small class="pct">' + (v(k) != null ? v(k).toFixed(0) + "%" : "") + "</small></div>" + (c != null ? '<div class="d ' + (c >= 0 ? "up" : "down") + '">期間中 格 ' + sg(c, 0) + "</div>" : ""); };
+  const gs = k => sl(k).map(x => x == null ? null : gradeOf(x));
+  let h = '<section class="sect gv-top"><h3>統治<small>危うい場面を乗り切る力。大きな数は格(0が五分五分、マイナスは荒れている)、右は乗り切れている割合</small></h3><div class="gv-head">' + big("統治") + spark(gs("統治"), { area: true, cls: "gv-sp", w: 260, h: 44 }) + "</div>" +
+    '<div class="gv-two">' + ["防復", "安寧"].map(g => '<div class="gv-g"><b>' + g + "</b><small>" + (g === "防復" ? "外:攻められたときの力" : "内:安心して事を進める力") + "</small>" + big(g) + spark(gs(g), { area: true, h: 30 }) + "</div>").join("") + "</div></section>";
   ["安寧", "防復"].forEach(g => {
     h += '<section class="sect"><h3>' + g + "の要素</h3>" + GOV_EL[g].map(el => {
-      const c = chg(el), last = G.scenes.filter(x => x.el === el).slice(-1)[0];
-      return '<div class="gv-el"><span class="gv-n">' + el + '</span><span class="gv-s">' + spark(sl(el), { h: 24 }) + '</span><span class="gv-x num">' + (v(el) != null ? v(el).toFixed(0) : "—") + "</span>" +
+      const c = gchg(el), last = G.scenes.filter(x => x.el === el).slice(-1)[0], g = gradeOf(v(el));
+      return '<div class="gv-el"><span class="gv-n">' + el + '</span><span class="gv-s">' + spark(gs(el), { h: 24 }) + '</span><span class="gv-x num ' + (g < 0 ? "down" : "") + '">' + gtxt(g) + '<small class="pct">' + (v(el) != null ? v(el).toFixed(0) + "%" : "") + "</small></span>" +
         '<span class="gv-c ' + (c == null ? "" : c >= 0 ? "up" : "down") + '">' + (c == null ? "場面なし" : sg(c, 0)) + "</span>" +
         (last ? '<small class="gv-l">最後:' + md(last.d) + " " + esc(last.what) + " " + (last.ok ? "○" : "×") + "</small>" : "") + "</div>";
     }).join("") + "</section>";
   });
   const miss = G.scenes.filter(x => !x.ok && x.d >= G.dates[Math.max(0, G.dates.length - 7)]).slice().reverse().slice(0, 12);
   h += '<section class="sect"><h3>この1週間に足を引っ張った場面<small>' + miss.length + "件</small></h3>" + (miss.length ? miss.map(x => '<div class="move"><span class="t">' + esc(x.what) + '</span><span class="st">' + esc(x.el) + '</span><span class="dt">' + md(x.d) + "</span></div>").join("") : '<div class="empty">ありません。</div>') + "</section>";
+  return h;
+}
+
+/* 威信のタブ */
+function preTab(d){
+  const P = d.pre_file;
+  if (!P || P.rating == null) return '<section class="sect"><h3>威信</h3><div class="empty">威信の計算はまだ始まっていません。省アプリの「偉業」で偉業に結果を付けて終えるか、作戦期の目標・RAID・ALERTの期日が来ると、毎朝ここに出ます。</div></section>';
+  const hist = (P.history || []), by = P.byKind || {};
+  let h = '<section class="sect"><h3>威信<small>偉業と約束の戦績で決まる格。0から始まり、マイナスは威信が損なわれている状態。右の%は、五分五分の挑戦を今の自分が成し遂げられる見込み</small></h3><div class="gv-head"><div class="gv-v num ' + (+P.rating < 0 ? "down" : "") + '">' + sg(+P.rating, 0) + '<small class="pct">' + prePct(+P.rating).toFixed(0) + '%</small></div>' +
+    (hist.length > 1 ? spark([0].concat(hist.map(x => x.r)), { area: true, cls: "gv-sp", w: 260, h: 44 }) : "") + '<div class="d">確かさ ±' + (+P.rd || 0).toFixed(0) + "</div></div>";
+  const tot = Math.abs(by.偉業 || 0) + Math.abs(by.信用 || 0) || 1;
+  h += '<div class="pre-by">' + [["偉業", "成し遂げたことによる動き"], ["信用", "約束を守ったか(破ったか)による動き"]].map(([k, l]) => { const v = +by[k] || 0;
+      return '<div class="cr"><span class="cr-n">' + k + "<em>" + l + '</em></span><span class="cr-b"><span class="cr-l">' + (v < 0 ? '<i style="width:' + (Math.abs(v) / tot * 100).toFixed(1) + '%"></i>' : "") + '</span><span class="cr-r">' + (v > 0 ? '<i style="width:' + (v / tot * 100).toFixed(1) + '%"></i>' : "") + '</span></span><span class="cr-v num ' + (v >= 0 ? "up" : "down") + '">' + sg(v, 0) + "</span></div>"; }).join("") + "</div></section>";
+  const pend = P.pending || [];
+  if (pend.length) h += '<section class="sect"><h3>これからの勝負<small>今の威信で、成功したら・失敗したらどれだけ動くか</small></h3>' + pend.map(m => '<div class="pm"><div class="pm-h"><span class="pm-k ' + (m.kind === "偉業" ? "k1" : "k2") + '">' + esc(m.kind) + '</span><b>' + esc(m.name) + '</b></div>' +
+      '<div class="pm-sw"><span class="up">成功なら ' + sg(m.win, 1) + '</span><span class="down">失敗なら ' + sg(m.lose, 1) + "</span>" + (m.due ? "<small>期日 " + esc(m.due) + "</small>" : "") + "</div>" +
+      (m.parts ? '<div class="pm-s">期待 ' + Math.round(m.E * 100) + "% ・ " + Object.entries(m.parts).map(([k, v]) => k + " " + (+v).toFixed(2)).join("・") + "</div>" : '<div class="pm-s">期待 ' + Math.round(m.E * 100) + "%</div>") + "</div>").join("") + "</section>";
+  const ms = (P.matches || []).slice().reverse();
+  h += '<section class="sect"><h3>これまでの勝負<small>' + ms.length + "件 ・ 新しい順</small></h3>" + (ms.length ? ms.map(m => '<div class="pm"><div class="pm-h"><span class="pm-k ' + (m.kind === "偉業" ? "k1" : "k2") + '">' + esc(m.kind) + '</span><b>' + esc(m.name) + '</b><span class="pm-d num ' + (m.delta >= 0 ? "up" : "down") + '">' + sg(m.delta, 1) + "</span></div>" +
+      '<div class="pm-s">' + md(m.d) + " ・ 結果 " + Math.round(m.s * 100) + "% ・ 期待 " + Math.round(m.E * 100) + "% ・ 重さ " + (m.w).toFixed(2) + (m.parts ? "(" + Object.entries(m.parts).map(([k, v]) => k + " " + (+v).toFixed(2)).join("・") + ")" : "") + "</div></div>").join("")
+    : '<div class="empty">まだありません。</div>') + "</section>";
   return h;
 }
 
@@ -656,18 +705,24 @@ function formulaHtml(){
       note("要因のタブの割り振りは、2つの日の差を、領土・支配・重要度(タスクまで分けるときは、タスクの点と重要度)にシャープレイ値で分けたもの。")) +
     f("重要度と時勢(省アプリ)", eq("プラスの時勢:焦燥 = 熱量 × 色 ÷ 10、純粋 = 熱量 ×(1 − 色 ÷ 10)\nマイナスの時勢:安心 = −熱量 × 確かさ(はっきり 1・なんとなく 0.6)\n\nその日に効いている量 = 大きさ × min(1, 経った日数 ÷ 漠然さの日数)× 打ち消しの残り\n気持ちの相場 = 3 ÷(5 + 抱えている熱量の合計)\n重要度の目標 = 気持ちの相場 ×(焦燥 + 信用 × 純粋 + 安心)× 省の割合\n重要度は、目標へ毎日1割ずつ近づく") +
       tbl(["項目", "値"], [["漠然さ", "その日だけ 1日・3日・1週間 7日・1か月 30日"], ["打ち消し", "残り ×(1 − 割合)。少し 0.25・半分 0.5・ほとんど 0.9"], ["信用", "やりたい気持ちを書いたあと、その省で計画が動いた割合(純粋の分にだけ掛かる)"], ["しんどさ", "重要度には入れず、別に記録"]])) +
-    f("統治", eq("場面ごとに、株価のように値が動く(上限100)\n○なら:値 +(100 − 値)× 割合\n×なら:値 − 値 × 割合\n割合 = そのタスクの重み ÷ 全タスクの重み\n\n要素・防復・安寧・統治は、それぞれ同じ場面から別々に動く\n(防復は防復の要素の場面だけ、安寧は安寧の要素の場面だけ、統治はすべての場面)\n最初の場面で、○なら100・×なら0から始まる") +
+    f("統治", eq("場面ごとに、株価のように値が動く(上限100)\n○なら:値 +(100 − 値)× 割合\n×なら:値 − 値 × 割合\n割合 = そのタスクの重み ÷ 全タスクの重み\n\n要素・防復・安寧・統治は、それぞれ同じ場面から別々に動く\n(防復は防復の要素の場面だけ、安寧は安寧の要素の場面だけ、統治はすべての場面)\n何も分かっていないうちは五分五分(50%)から始まる\n\n格 = 400 × log10(割合 ÷(100 − 割合))\n(威信と同じEloの目盛り。0 が五分五分、マイナスは崩れるほうが多い=荒れている。上に行くほど1つ上がる重みが大きくなる)") +
       tbl(["", "要素", "場面", "○(乗り切った)"], [
         ["防復", "被害を抑える", "ALERTのあいだ、対象の省で予定されていたタスク", "行えた"],
         ["防復", "初動", "ALERTが起きた日(割合は対象の省のタスクの重み)", "その日のうちに最初の対応に手を付けた"],
         ["防復", "修復", "ALERTのあいだに3回続けて落ちたタスク", "ALERTが終わるまでに再び行えた"],
-        ["防復", "補填", "急用で潰れた日の賠償計画", "行えた"],
+        ["防復", "補填", "ALERTの対応のうち期日つきのもの(期日の日)", "期日までに済ませた"],
         ["安寧", "継続", "前の回にできたタスクの、次の回", "次の回もできた"],
         ["安寧", "立ち直り", "前の回にできなかったタスクの、次の回", "次の回はできた"],
         ["安寧", "取り戻し", "量が足りなかった回", "次に足りなくなる前に、上乗せで埋めた"],
         ["安寧", "要石", "要石のタスクがある日", "その日のうちに済ませた"],
-        ["安寧", "先回り", "実際に来た脅威(割合はさらされたタスクの重み)", "朝の偵察で前もって挙げていた"]])) +
-    f("威信", note("準備中。決まったらここに載ります。")) +
+        ["安寧", "先回り", "実際に来た脅威(偵察の「来た」か、崩れの記録で挙げたもの)", "朝の偵察で「来そう」に挙げていた"]]) +
+      note("計算は行軍表が昨日までの記録で行い、roadmap/gov/governance.json に書き出したものを、ここで表示しています。要石・偵察・崩れの記録は行軍表で、ALERTの対応を済ませた日は省アプリで付けます。")) +
+    f("威信", eq("威信の動き = 速さ × 重さ ×(結果 − 期待)\n期待 = 1 ÷(1 + 10^((難しさ − 威信)÷ 400))\n難しさ = −400 × log10(見込み ÷(1 − 見込み))\n速さ:グリコ式。勝負が少ないうちは大きく動き、記録が増えるほど(確かさが上がるほど)落ち着く\n始まり:威信 0(マイナスは威信が損なわれている状態)・確かさ 350\n威信の割合 = 1 ÷(1 + 10^(−威信 ÷ 400))(五分五分の挑戦を、今の自分が成し遂げられる見込み)\n\n400 は単位。どの数にしても、表示される数の大きさが変わるだけで、見込み・順位・上がり下がりの比べ方は変わらない\n350(確かさの始まり)は、記録が無いときにどれだけ大きく動くかを決める、グリコ式の標準の値。目盛りを変えるなら同じ割合で変える") +
+      tbl(["", "重さ", "見込み"], [["偉業", "規模 × 懸け具合 × 裏付け", "宣言した日までの、結びついたタスクの実行の割合"], ["約束", "規模", "これまでに約束を守った割合"]]) +
+      tbl(["部品", "中身"], [["規模", "結びついたタスク(約束は担当の省のタスク)の重み ÷ 全タスクの重み"], ["懸け具合", "その偉業に効いている熱量 ÷ 心が抱えている熱量の合計(時勢と偉業のすべて)。挑戦していたあいだの平均"],
+        ["裏付け", "偉業への気持ちを記録した日のうち、結びついたタスクを実行した日の割合"], ["割合の数え方", "(済んだ数 + 1)÷(数 + 2)。1件目からいきなり0や1にならないための、ラプラスの継起の規則"],
+        ["約束になるもの", "作戦期の目標(期日に記録した値 ÷ 目標の値)、RAID(期限までに制圧・引き渡し)、ALERT(期限までに収束)"], ["偉業の結果", "省アプリの「偉業」で終えるときに付けた成功・失敗・途中まで(%)"]]) +
+      note("計算は行軍表が行い、roadmap/gov/prestige.json に書き出したものを、ここで表示しています。")) +
     note("毎朝の計算(GitHub Actions)の中の細かい式は、その仕組みのファイルを見せてもらえれば、ここにそのまま載せられます。");
 }
 
@@ -697,7 +752,13 @@ async function load(){
     const meta = await r.json();
     let text; if (meta.content) text = b64utf8(meta.content);
     else { const raw = await fetch(url, { headers: Object.assign({}, headers, { "Accept": "application/vnd.github.raw+json" }), cache: "no-store" }); text = await raw.text(); }
-    DATA = JSON.parse(text); lsSet(KEY_CACHE, DATA); render();
+    DATA = JSON.parse(text);
+    // 統治:行軍表が書き出した計算の結果を読む(まだ無ければ準備中のまま)
+    try { const gu = "https://api.github.com/repos/" + encodeURIComponent(c.owner) + "/" + encodeURIComponent(c.repo) + "/contents/" + GOV_PATH + "?ref=" + encodeURIComponent(c.branch || "main");
+      const gr = await fetch(gu, { headers, cache: "no-store" }); if (gr.ok) { const gm = await gr.json(); if (gm.content) DATA.gov_file = JSON.parse(b64utf8(gm.content)); } } catch (e) {}
+    try { const pu = "https://api.github.com/repos/" + encodeURIComponent(c.owner) + "/" + encodeURIComponent(c.repo) + "/contents/" + PRE_PATH + "?ref=" + encodeURIComponent(c.branch || "main");
+      const prr = await fetch(pu, { headers, cache: "no-store" }); if (prr.ok) { const pm = await prr.json(); if (pm.content) DATA.pre_file = JSON.parse(b64utf8(pm.content)); } } catch (e) {}
+    lsSet(KEY_CACHE, DATA); render();
     if (msg) { msg.classList.remove("err"); msg.textContent = "読み込みました"; }
     return true;
   } catch (e) {
@@ -716,6 +777,7 @@ async function load(){
   board.addEventListener("click", e => {
     if (e.target.closest("[data-fx-open]")) { SHOW_FORMULA = true; render(); window.scrollTo && window.scrollTo(0, 0); return; }
     if (e.target.closest("[data-fx-close]")) { SHOW_FORMULA = false; render(); return; }
+    const ps = e.target.closest("[data-psub]"); if (ps) { lsSet(KEY_PSUB, ps.dataset.psub); render(); return; }
     const go = e.target.closest("[data-go]"); if (go) { lsSet(KEY_TAB, go.dataset.go); render(); window.scrollTo && window.scrollTo(0, 0); return; }
     const rb = e.target.closest("[data-range]"); if (rb) { const R0 = DATA && rangeOf(DATA); lsSet(KEY_RANGE, rb.dataset.range === "custom" ? { mode: "custom", from: R0 && R0.from, to: R0 && R0.to } : { mode: rb.dataset.range }); render(); return; }
     const cb = e.target.closest("[data-cmp]"); if (cb) { const m = lsGet(KEY_CMP, { mode: "1" }); lsSet(KEY_CMP, cb.dataset.cmp === "custom" ? { mode: "custom", from: m.from, to: m.to } : { mode: cb.dataset.cmp }); render(); return; }
@@ -736,6 +798,134 @@ async function load(){
   render(); load();
 })();
 window.__kk = { attribution, taskAttribution, rangeOf, render, get data(){ return DATA; } };
+
+</script>
+<script>
+
+/* ───── 効果音(省・行軍表・関所と同じ音。入/切と音量はアプリどうしで共通) ───── */
+
+// ───────── 効果音(ブラウザの中で音を合成。音のファイルは使わない)─────────
+// 設定(入/切・音量)は 3つのアプリで共通(localStorage の se-on / se-vol)
+const SE = (() => {
+  let ctx = null, master = null, lastTap = 0, lastErr = 0;
+  const ls = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } };
+  let on = ls("se-on", "1") !== "0", vol = Math.max(0, Math.min(1, +ls("se-vol", "0.5")));
+  function ac(){
+    if (!on) return null;
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+    if (!ctx) { ctx = new AC(); master = ctx.createGain(); master.connect(ctx.destination); }
+    if (ctx.state === "suspended") ctx.resume();
+    master.gain.value = vol * 0.9;
+    return ctx;
+  }
+  // 1つの音:周波数 f(滑らせるなら f2)、始まり t、長さ d、波の形、大きさ g
+  function note(c, f, t, d, o){
+    o = o || {};
+    const osc = c.createOscillator(), gn = c.createGain(), t0 = c.currentTime + (t || 0);
+    osc.type = o.type || "sine"; osc.frequency.setValueAtTime(f, t0);
+    if (o.f2) osc.frequency.exponentialRampToValueAtTime(o.f2, t0 + d);
+    const g = o.g == null ? 0.2 : o.g, a = o.a == null ? 0.005 : o.a;
+    gn.gain.setValueAtTime(0.0001, t0); gn.gain.exponentialRampToValueAtTime(g, t0 + a);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    let last = gn;
+    if (o.lp) { const fl = c.createBiquadFilter(); fl.type = "lowpass"; fl.frequency.value = o.lp; gn.connect(fl); last = fl; }
+    osc.connect(gn); last.connect(master); osc.start(t0); osc.stop(t0 + d + 0.05);
+  }
+  // 鐘のような音(基音 + 倍音)
+  const bell = (c, f, t, d, g) => { note(c, f, t, d, { g: g }); note(c, f * 2, t, d * 0.6, { g: g * 0.35 }); note(c, f * 3.01, t, d * 0.3, { g: g * 0.12 }); };
+  // ざわめき(風・波)
+  function noise(c, t, d, o){
+    o = o || {};
+    const n = Math.floor(c.sampleRate * d), buf = c.createBuffer(1, n, c.sampleRate), ch = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) ch[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource(), fl = c.createBiquadFilter(), gn = c.createGain(), t0 = c.currentTime + (t || 0);
+    src.buffer = buf; fl.type = o.type || "lowpass"; fl.Q.value = o.q || 0.7;
+    fl.frequency.setValueAtTime(o.f || 400, t0); if (o.f2) fl.frequency.exponentialRampToValueAtTime(o.f2, t0 + d * 0.8);
+    const g = o.g || 0.08;
+    gn.gain.setValueAtTime(0.0001, t0); gn.gain.exponentialRampToValueAtTime(g, t0 + d * 0.35); gn.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    src.connect(fl); fl.connect(gn); gn.connect(master); src.start(t0); src.stop(t0 + d + 0.05);
+  }
+  const lib = {
+    tap: c => note(c, 880, 0, 0.05, { f2: 660, g: 0.05 }),
+    tab: c => { note(c, 520, 0, 0.07, { type: "triangle", g: 0.07 }); note(c, 780, 0.03, 0.06, { type: "triangle", g: 0.04 }); },
+    toggleOn: c => note(c, 600, 0, 0.08, { f2: 1150, g: 0.08 }),
+    toggleOff: c => note(c, 900, 0, 0.08, { f2: 480, g: 0.06 }),
+    done: c => { bell(c, 1046.5, 0, 0.45, 0.11); bell(c, 1318.5, 0.08, 0.6, 0.11); },
+    save: c => { bell(c, 784, 0, 0.35, 0.08); bell(c, 1174.7, 0.01, 0.4, 0.06); },
+    remove: c => note(c, 520, 0, 0.14, { f2: 240, type: "triangle", g: 0.08 }),
+    error: c => { note(c, 220, 0, 0.09, { type: "square", g: 0.05, lp: 900 }); note(c, 196, 0.12, 0.12, { type: "square", g: 0.05, lp: 900 }); },
+    open: c => noise(c, 0, 0.18, { f: 300, f2: 2400, type: "bandpass", q: 1.2, g: 0.05 }),
+    fanfare: c => { [523.25, 659.25, 783.99].forEach((f, i) => { note(c, f, i * 0.09, 0.3, { type: "triangle", g: 0.12 }); note(c, f * 2, i * 0.09, 0.2, { g: 0.03 }); });
+      bell(c, 1046.5, 0.27, 1.1, 0.13); note(c, 523.25, 0.27, 1.0, { type: "triangle", g: 0.06 });
+      [2093, 2637, 3136, 2637].forEach((f, i) => note(c, f, 0.45 + i * 0.07, 0.25, { g: 0.025 })); },
+    levelup: c => { note(c, 600, 0, 0.5, { f2: 1600, type: "triangle", g: 0.08 }); [1568, 1975.5, 2349.3, 3136].forEach((f, i) => bell(c, f, 0.35 + i * 0.06, 0.4, 0.04)); },
+    issue: c => { [392, 523.25, 659.25, 783.99].forEach((f, i) => note(c, f, i * 0.12, i === 3 ? 0.9 : 0.22, { type: "sawtooth", g: 0.07, lp: 1800, a: 0.02 }));
+      note(c, 196, 0.36, 0.9, { type: "sawtooth", g: 0.04, lp: 700, a: 0.03 }); },
+    swell: c => { noise(c, 0, 0.9, { f: 200, f2: 1400, g: 0.05 }); [440, 554.4, 659.3].forEach(f => note(c, f, 0.05, 0.9, { g: 0.035, a: 0.35 })); },
+    unswell: c => { noise(c, 0, 0.6, { f: 1200, f2: 250, g: 0.04 }); note(c, 554.4, 0, 0.5, { f2: 440, g: 0.04, a: 0.1 }); },
+    pluck: c => { note(c, 880, 0, 0.35, { type: "triangle", g: 0.09, a: 0.002 }); note(c, 1318.5, 0.05, 0.4, { type: "triangle", g: 0.06, a: 0.002 }); },
+    link: c => { note(c, 659.3, 0, 0.25, { type: "triangle", g: 0.08, a: 0.002 }); note(c, 987.8, 0.09, 0.35, { type: "triangle", g: 0.08, a: 0.002 }); },
+    lock: c => { note(c, 180, 0, 0.06, { type: "square", g: 0.05, lp: 1200 }); note(c, 120, 0.05, 0.08, { type: "square", g: 0.05, lp: 900 }); },
+    unlock: c => { note(c, 160, 0, 0.05, { type: "square", g: 0.05, lp: 1200 }); bell(c, 1318.5, 0.08, 0.45, 0.07); },
+    send: c => noise(c, 0, 0.25, { f: 2400, f2: 400, type: "bandpass", q: 1.5, g: 0.06 }),
+    down: c => { note(c, 660, 0, 0.25, { f2: 440, type: "triangle", g: 0.07 }); },
+  };
+  function play(name, opt){
+    try {
+      const c = ac(); if (!c || !lib[name]) return;
+      if (name === "tap" || name === "tab") { const now = Date.now(); if (now - lastTap < 45) return; lastTap = now; }
+      if (name === "error") { const now = Date.now(); if (now - lastErr < 500) return; lastErr = now; }
+      lib[name](c, opt);
+    } catch (e) {}
+  }
+  // 場面の見分け:アプリごとの [選び方, 音] の並び(上から順に見る)
+  let rules = [];
+  function soundFor(el){
+    for (const [sel, snd] of rules) { const hit = el.closest(sel); if (hit) return typeof snd === "function" ? snd(hit) : snd; }
+    const inp = el.closest("input");
+    if (inp && (inp.type === "checkbox" || inp.type === "radio")) return inp.checked ? "toggleOn" : "toggleOff";
+    if (el.closest("nav button, [role=tab], .tabs button")) return "tab";
+    if (el.closest("button, a[href], summary, .chip-b, [data-v]")) return "tap";
+    return null;
+  }
+  function init(appRules){
+    rules = appRules || [];
+    document.addEventListener("click", e => { const s = e.target && e.target.closest ? soundFor(e.target) : null; if (s) play(s); }, true);
+    // エラーの表示(class="err")が出たら、低い音
+    try {
+      new MutationObserver(ms => { for (const m of ms) { const el = m.target.nodeType === 1 ? m.target : m.target.parentElement; if (!el || !el.closest) continue;
+        const er = el.closest(".err"); if (er && (er.textContent || "").trim()) { play("error"); break; } } })
+        .observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["class"] });
+    } catch (e) {}
+  }
+  // 設定の欄(入/切・音量)。アプリの版の表示のそばに置く
+  function mount(anchor){
+    if (!anchor || document.getElementById("se-row")) return;
+    const row = document.createElement("div"); row.id = "se-row"; row.className = "se-row";
+    row.innerHTML = '<span>効果音</span><button type="button" id="se-on" class="se-btn"></button><label class="se-vol">音量 <input id="se-vol" type="range" min="0" max="1" step="0.05"></label>';
+    anchor.parentNode.insertBefore(row, anchor.nextSibling);
+    const b = row.querySelector("#se-on"), r = row.querySelector("#se-vol");
+    const show = () => { b.textContent = on ? "入" : "切"; b.setAttribute("aria-pressed", String(on)); r.value = vol; r.disabled = !on; };
+    b.addEventListener("click", () => { on = !on; try { localStorage.setItem("se-on", on ? "1" : "0"); } catch (e) {} show(); if (on) play("toggleOn"); });
+    r.addEventListener("input", () => { vol = +r.value; try { localStorage.setItem("se-vol", String(vol)); } catch (e) {} });
+    r.addEventListener("change", () => play("done"));
+    show();
+  }
+  return { play, init, mount, soundFor, get on(){ return on; } };
+})();
+
+SE.init([
+  ["[data-fx-open]", "open"], ["[data-fx-close]", "tab"],
+  ["[data-go]", "open"],
+  ["#connect, #reload", "open"],
+  [".bub, .min[data-min]", el => (SE_SEL_BEFORE === (el.dataset.min || el.getAttribute("data-min"))) ? "toggleOff" : "toggleOn"],
+  ["[data-psub], [data-range], [data-cmp]", "tab"],
+  ["nav.tabs button", "tab"]
+]);
+var SE_SEL_BEFORE = null;
+document.addEventListener("pointerdown", () => { SE_SEL_BEFORE = typeof SEL !== "undefined" ? SEL : null; }, true);
+(function(){ const go = () => { const a = document.getElementById("conn-msg"); SE.mount(a ? a.closest(".row") : null); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go); else go(); })();
 
 </script>
 </body>
