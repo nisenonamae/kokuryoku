@@ -154,6 +154,8 @@ svg text{font-family:"Zen Kaku Gothic New","Hiragino Sans",sans-serif}
 .gv-l{grid-column:1/-1;font-size:.72rem;color:var(--sub)}
 nav.tabs button{font-size:.92rem}
 /* 威信 */
+.pre-eq{display:flex;align-items:center;gap:.5rem;margin:.6rem 0 .3rem;flex-wrap:wrap}.pre-eq span{display:flex;flex-direction:column;align-items:center;min-width:3.6rem}.pre-eq b{font-size:1.15rem}.pre-eq small{font-size:.7rem;color:var(--sub)}.pre-eq i{font-style:normal;color:var(--sub)}
+.note-s{font-size:.76rem;color:var(--sub);margin:.4rem 0 0}
 .pct{font-size:.42em;font-weight:500;color:var(--sub);margin-left:.35em;letter-spacing:0}
 .gv-x .pct{font-size:.72em;display:block;margin:0;line-height:1}
 .pm-sw{display:flex;flex-wrap:wrap;gap:.2rem .9rem;align-items:baseline;font-size:.86rem;font-weight:700;margin-top:.15rem}.pm-sw small{font-weight:400;font-size:.72rem;color:var(--sub)}
@@ -236,7 +238,7 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 
 "use strict";
 /* 国力年報:毎朝の集計(docs/data/stats.json)を、非公開のリポジトリからトークンで読み、盤面に描く。
    図はすべて SVG で自前に描く(外の図の道具は使わない) */
-const APP_VERSION = "2026-10-20 k12";
+const APP_VERSION = "2026-10-22 k13";
 const KEY_CONN = "kokuryoku-conn", KEY_CACHE = "kokuryoku-cache", KEY_TAB = "kokuryoku-tab", KEY_CMP = "kokuryoku-cmp", KEY_RANGE = "kokuryoku-range";
 const STATS_PATH = "docs/data/stats.json";
 const GOV_PATH = "roadmap/gov/governance.json";   // 統治の計算の結果(行軍表が書き出す)
@@ -475,7 +477,7 @@ function render(){
   renderMast(DATA);
   if (DATA.gov_file && !DATA.__gov && DATA.gov_file.series) { const F = DATA.gov_file; DATA.__gov = { dates: F.dates || [], series: F.series, val: F.val || {}, scenes: F.scenes || [] };
     DATA.governance = { value: F.val["統治"] }; }
-  if (DATA.pre_file && DATA.pre_file.rating != null) DATA.prestige = { value: DATA.pre_file.rating, by: DATA.pre_file.byKind || {} };
+  if (DATA.pre_file && DATA.pre_file.version === 2 && DATA.pre_file.value != null) DATA.prestige = { value: DATA.pre_file.value, P: DATA.pre_file };
   if (DATA.gov_raw && !DATA.__gov) { DATA.__gov = computeGov(DATA.gov_raw); const G = DATA.__gov; if (G) DATA.governance = { value: G.val["統治"] }; }
   box.innerHTML = ({ "国力": powerTab, "統治": govTab, "威信": preTab, "要因": causesTab, "省": ministriesTab, "時間": timeTab, "設定": settingsHtml }[t] || powerTab)(DATA);
 }
@@ -505,8 +507,11 @@ function powerTab(d){
     (gov && gov.value != null ? (() => { const G = d.__gov || { val: {} }, g = gradeOf(+gov.value);
       return '<div class="pillar" data-go="統治" style="cursor:pointer"><h2>統治 ›</h2><div class="v num ' + (g < 0 ? "down" : "") + '">' + gtxt(g) + '<small class="pct">' + (+gov.value).toFixed(0) + '%</small></div><div class="s">防復 ' + gtxt(gradeOf(G.val["防復"])) + " ・ 安寧 " + gtxt(gradeOf(G.val["安寧"])) + "</div></div>"; })()
       : '<div class="pillar wait"><h2>統治</h2><div class="v num">—</div><div class="s">防衛省の守りから測る</div><div class="parts"><span>防復</span><span>安寧</span></div></div>') +
-    (pre && pre.value != null ? '<div class="pillar" data-go="威信" style="cursor:pointer"><h2>威信 ›</h2><div class="v num ' + (+pre.value < 0 ? "down" : "") + '">' + sg(+pre.value, 0) + '<small class="pct">' + prePct(+pre.value).toFixed(0) + '%</small></div><div class="s">偉業 ' + sg(+(pre.by || {}).偉業 || 0, 0) + " ・ 信用 " + sg(+(pre.by || {}).信用 || 0, 0) + "</div></div>"
-      : '<div class="pillar wait"><h2>威信</h2><div class="v num">—</div><div class="s">偉業への挑戦の戦績から測る</div><div class="parts"><span>準備中</span></div></div>') +
+    (pre && pre.value != null ? (() => { const P = pre.P, hs = (P.history || []).map(x => x.v);
+      return '<div class="pillar" data-go="威信" style="cursor:pointer"><h2>威信 ›</h2><div class="v num ' + (+pre.value < 0 ? "down" : "") + '">' + (+pre.value).toFixed(1) + "</div>" +
+        (hs.length > 2 ? spark(hs, { area: true, cls: "psp", w: 200, h: 26 }) : "") +
+        '<div class="s">実績 ' + (+P.実績).toFixed(1) + " × 統治 " + Math.round(P.統治) + "% × 信用 " + Math.round(P.信用) + "%</div></div>"; })()
+      : '<div class="pillar wait"><h2>威信</h2><div class="v num">—</div><div class="s">偉業と約束の実績 × 統治 × 信用</div><div class="parts"><span>準備中</span></div></div>') +
     "</div>" + subSw;
   // 国力の推移
   const r = lsGet(KEY_RANGE, { mode: "30" });
@@ -557,23 +562,31 @@ function govTab(d){
   return h;
 }
 
-/* 威信のタブ */
+/* 威信のタブ:威信 = 実績 × 統治(%) × 信用(%) */
 function preTab(d){
   const P = d.pre_file;
-  if (!P || P.rating == null) return '<section class="sect"><h3>威信</h3><div class="empty">威信の計算はまだ始まっていません。省アプリの「偉業」で偉業に結果を付けて終えるか、作戦期の目標・RAID・ALERTの期日が来ると、毎朝ここに出ます。</div></section>';
-  const hist = (P.history || []), by = P.byKind || {};
-  let h = '<section class="sect"><h3>威信<small>偉業と約束の戦績で決まる格。0から始まり、マイナスは威信が損なわれている状態。右の%は、五分五分の挑戦を今の自分が成し遂げられる見込み</small></h3><div class="gv-head"><div class="gv-v num ' + (+P.rating < 0 ? "down" : "") + '">' + sg(+P.rating, 0) + '<small class="pct">' + prePct(+P.rating).toFixed(0) + '%</small></div>' +
-    (hist.length > 1 ? spark([0].concat(hist.map(x => x.r)), { area: true, cls: "gv-sp", w: 260, h: 44 }) : "") + '<div class="d">確かさ ±' + (+P.rd || 0).toFixed(0) + "</div></div>";
-  const tot = Math.abs(by.偉業 || 0) + Math.abs(by.信用 || 0) || 1;
-  h += '<div class="pre-by">' + [["偉業", "成し遂げたことによる動き"], ["信用", "約束を守ったか(破ったか)による動き"]].map(([k, l]) => { const v = +by[k] || 0;
-      return '<div class="cr"><span class="cr-n">' + k + "<em>" + l + '</em></span><span class="cr-b"><span class="cr-l">' + (v < 0 ? '<i style="width:' + (Math.abs(v) / tot * 100).toFixed(1) + '%"></i>' : "") + '</span><span class="cr-r">' + (v > 0 ? '<i style="width:' + (v / tot * 100).toFixed(1) + '%"></i>' : "") + '</span></span><span class="cr-v num ' + (v >= 0 ? "up" : "down") + '">' + sg(v, 0) + "</span></div>"; }).join("") + "</div></section>";
+  if (!P || P.version !== 2 || P.value == null) return '<section class="sect"><h3>威信</h3><div class="empty">威信の計算はまだ始まっていません。行軍表を開くと計算され、ここに出ます(前の形の計算が残っているときも、行軍表を一度開けば新しい形に置き換わります)。</div></section>';
+  const hist = P.history || [], parts = P.parts || {}, f1 = v => (+v || 0).toFixed(1);
+  const first = hist.find(x => x.v != null), chg = first ? +P.value - first.v : null;
+  let h = '<section class="sect"><h3>威信<small>実績 × 統治 × 信用。偉業を成し遂げ、約束を守り、国をよく治めるほど際限なく伸びる。約束を破り、国が荒れれば下がる</small></h3>' +
+    '<div class="gv-head"><div class="gv-v num ' + (+P.value < 0 ? "down" : "") + '">' + f1(P.value) + "</div>" +
+    (hist.length > 1 ? spark(hist.map(x => x.v), { area: true, cls: "gv-sp", w: 260, h: 44 }) : "") +
+    (chg != null && hist.length > 1 ? '<div class="d ' + (chg >= 0 ? "up" : "down") + '">期間中 ' + sg(chg, 1) + "</div>" : "") + "</div>" +
+    '<div class="pre-eq"><span><b class="num">' + f1(P.実績) + "</b><small>実績</small></span><i>×</i><span><b class=\"num\">" + Math.round(P.統治) + "%</b><small>統治</small></span><i>×</i><span><b class=\"num\">" + Math.round(P.信用) + "%</b><small>信用</small></span></div>";
+  const tot = Math.abs(+parts.偉業 || 0) + Math.abs(+parts.守った約束 || 0) + Math.abs(+parts.破った約束 || 0) || 1;
+  h += '<div class="pre-by">' + [["偉業", "成し遂げた偉業の重み"], ["守った約束", "期日に果たした作戦期の目標・RAID・ALERT"], ["破った約束", "期日に果たせなかった約束(後から果たせば消える)"]].map(([k, l]) => { const v = +parts[k] || 0;
+      return '<div class="cr"><span class="cr-n">' + k + "<em>" + l + '</em></span><span class="cr-b"><span class="cr-l">' + (v < 0 ? '<i style="width:' + (Math.abs(v) / tot * 100).toFixed(1) + '%"></i>' : "") + '</span><span class="cr-r">' + (v > 0 ? '<i style="width:' + (v / tot * 100).toFixed(1) + '%"></i>' : "") + '</span></span><span class="cr-v num ' + (v >= 0 ? "up" : "down") + '">' + sg(v, 1) + "</span></div>"; }).join("") + "</div>";
+  if (P.calib && P.calib.n) h += '<p class="note-s">見込みの当たり具合:付けた見込みの平均 ' + Math.round(P.calib.付けた見込み * 100) + "% ・ 実際に成し遂げた割合 " + Math.round(P.calib.成し遂げた割合 * 100) + "%(終えた偉業 " + P.calib.n + "件。難しさはこの比で直しています)</p>";
+  h += "</section>";
   const pend = P.pending || [];
-  if (pend.length) h += '<section class="sect"><h3>これからの勝負<small>今の威信で、成功したら・失敗したらどれだけ動くか</small></h3>' + pend.map(m => '<div class="pm"><div class="pm-h"><span class="pm-k ' + (m.kind === "偉業" ? "k1" : "k2") + '">' + esc(m.kind) + '</span><b>' + esc(m.name) + '</b></div>' +
-      '<div class="pm-sw"><span class="up">成功なら ' + sg(m.win, 1) + '</span><span class="down">失敗なら ' + sg(m.lose, 1) + "</span>" + (m.due ? "<small>期日 " + esc(m.due) + "</small>" : "") + "</div>" +
-      (m.parts ? '<div class="pm-s">期待 ' + Math.round(m.E * 100) + "% ・ " + Object.entries(m.parts).map(([k, v]) => k + " " + (+v).toFixed(2)).join("・") + "</div>" : '<div class="pm-s">期待 ' + Math.round(m.E * 100) + "%</div>") + "</div>").join("") + "</section>";
-  const ms = (P.matches || []).slice().reverse();
-  h += '<section class="sect"><h3>これまでの勝負<small>' + ms.length + "件 ・ 新しい順</small></h3>" + (ms.length ? ms.map(m => '<div class="pm"><div class="pm-h"><span class="pm-k ' + (m.kind === "偉業" ? "k1" : "k2") + '">' + esc(m.kind) + '</span><b>' + esc(m.name) + '</b><span class="pm-d num ' + (m.delta >= 0 ? "up" : "down") + '">' + sg(m.delta, 1) + "</span></div>" +
-      '<div class="pm-s">' + md(m.d) + " ・ 結果 " + Math.round(m.s * 100) + "% ・ 期待 " + Math.round(m.E * 100) + "% ・ 重さ " + (m.w).toFixed(2) + (m.parts ? "(" + Object.entries(m.parts).map(([k, v]) => k + " " + (+v).toFixed(2)).join("・") + ")" : "") + "</div></div>").join("")
+  if (pend.length) h += '<section class="sect"><h3>これからの勝負<small>今の統治と信用のままなら、威信がおよそどれだけ動くか</small></h3>' + pend.map(m => '<div class="pm"><div class="pm-h"><span class="pm-k ' + (m.kind === "偉業" ? "k1" : "k2") + '">' + esc(m.kind) + '</span><b>' + esc(m.name) + "</b></div>" +
+      '<div class="pm-sw"><span class="up">' + (m.kind === "偉業" ? "成し遂げたら " : "守ったら ") + sg(m.win, 1) + "</span>" + (m.kind === "偉業" ? "" : '<span class="down">破ったら ' + sg(m.lose, 1) + "</span>") + (m.due ? "<small>期日 " + esc(m.due) + "</small>" : "") + "</div>" +
+      (m.parts && m.kind === "偉業" ? '<div class="pm-s">規模 ' + (+m.parts.規模).toFixed(2) + " ・ 懸け具合 " + (+m.parts.懸け具合).toFixed(2) + " ・ 見込み " + Math.round(m.parts.見込み * 100) + "%(難しさ " + (+m.parts.難しさ).toFixed(2) + ")</div>" : "") + "</div>").join("") + "</section>";
+  const ms = (P.items || []).slice().reverse();
+  h += '<section class="sect"><h3>これまでの実績<small>' + ms.length + "件 ・ 新しい順</small></h3>" + (ms.length ? ms.map(m => { const broke = m.kind !== "偉業" && m.s < 1, v = m.kind === "偉業" ? m.w : (broke ? -(m.w * (1 - m.s)) : m.w * m.s);
+      return '<div class="pm"><div class="pm-h"><span class="pm-k ' + (m.kind === "偉業" ? "k1" : "k2") + '">' + esc(m.kind) + '</span><b>' + esc(m.name) + '</b><span class="pm-d num ' + (v >= 0 && !(broke && !m.late) ? "up" : "down") + '">' + (broke && m.late ? "±0" : sg(v, 1)) + "</span></div>" +
+        '<div class="pm-s">' + md(m.d) + " ・ 結果 " + Math.round(m.s * 100) + "%" + (m.kind === "偉業" ? " ・ 規模 " + (+m.parts.規模).toFixed(2) + " ・ 懸け具合 " + (+m.parts.懸け具合).toFixed(2) + " ・ 見込み " + Math.round(m.parts.見込み * 100) + "%(難しさ " + (+m.parts.難しさ).toFixed(2) + ")" : " ・ 重み " + f1(m.w) + (m.cred != null ? " ・ 信用 → " + Math.round(m.cred) + "%" : "")) +
+        (broke && m.late ? " ・ " + md(m.late) + "に後から果たした" : "") + "</div></div>"; }).join("")
     : '<div class="empty">まだありません。</div>') + "</section>";
   return h;
 }
@@ -717,11 +730,13 @@ function formulaHtml(){
         ["安寧", "要石", "要石のタスクがある日", "その日のうちに済ませた"],
         ["安寧", "先回り", "実際に来た脅威(偵察の「来た」か、崩れの記録で挙げたもの)", "朝の偵察で「来そう」に挙げていた"]]) +
       note("計算は行軍表が昨日までの記録で行い、roadmap/gov/governance.json に書き出したものを、ここで表示しています。要石・偵察・崩れの記録は行軍表で、ALERTの対応を済ませた日は省アプリで付けます。")) +
-    f("威信", eq("威信の動き = 速さ × 重さ ×(結果 − 期待)\n期待 = 1 ÷(1 + 10^((難しさ − 威信)÷ 400))\n難しさ = −400 × log10(見込み ÷(1 − 見込み))\n速さ:グリコ式。勝負が少ないうちは大きく動き、記録が増えるほど(確かさが上がるほど)落ち着く\n始まり:威信 0(マイナスは威信が損なわれている状態)・確かさ 350\n威信の割合 = 1 ÷(1 + 10^(−威信 ÷ 400))(五分五分の挑戦を、今の自分が成し遂げられる見込み)\n\n400 は単位。どの数にしても、表示される数の大きさが変わるだけで、見込み・順位・上がり下がりの比べ方は変わらない\n350(確かさの始まり)は、記録が無いときにどれだけ大きく動くかを決める、グリコ式の標準の値。目盛りを変えるなら同じ割合で変える") +
-      tbl(["", "重さ", "見込み"], [["偉業", "規模 × 懸け具合 × 裏付け", "宣言した日までの、結びついたタスクの実行の割合"], ["約束", "規模", "これまでに約束を守った割合"]]) +
-      tbl(["部品", "中身"], [["規模", "結びついたタスク(約束は担当の省のタスク)の重み ÷ 全タスクの重み"], ["懸け具合", "その偉業に効いている熱量 ÷ 心が抱えている熱量の合計(時勢と偉業のすべて)。挑戦していたあいだの平均"],
-        ["裏付け", "偉業への気持ちを記録した日のうち、結びついたタスクを実行した日の割合"], ["割合の数え方", "(済んだ数 + 1)÷(数 + 2)。1件目からいきなり0や1にならないための、ラプラスの継起の規則"],
-        ["約束になるもの", "作戦期の目標(期日に記録した値 ÷ 目標の値)、RAID(期限までに制圧・引き渡し)、ALERT(期限までに収束)"], ["偉業の結果", "省アプリの「偉業」で終えるときに付けた成功・失敗・途中まで(%)"]]) +
+    f("威信", eq("威信 = 実績 × 統治(%)× 信用(%)\n実績 = 成し遂げた偉業の重み + 守った約束の重み − 破った約束の重み\n(期日を過ぎてから果たした約束は、差し引かない)\n\n偉業の重み =(規模 + 懸け具合)× 難しさ × 結果\n約束の重み = 規模\n難しさ = 1 ÷ 届く見込み(賭けの払い戻しの倍率と同じ考え方)\n\n信用:約束を期日に守れているか。統治と同じ株価式で、50%から始まる\n守った:値 +(100 − 値)× 重み ・ 破った:値 − 値 × 重み(途中までなら、その割合で両方)\n\n表示の単位:重み 0.01(全タスクの重みの1%)= 1") +
+      tbl(["部品", "中身"], [["規模", "結びついたタスクの重み ÷ 全タスクの重み(行動の取り分)。作戦期の目標は「最初の一歩」のタスク、RAID・ALERTは作戦から作ったタスクとページに結びついたタスク。結びつきがない約束はタスク1つ分"],
+        ["懸け具合", "その偉業に効いている熱量 ÷ 心が抱えている熱量の合計(時勢と偉業のすべて)。心の取り分。挑戦していたあいだの平均"],
+        ["届く見込み", "偉業への気持ちの記録で付けた見込みの、挑戦していたあいだの平均(記録は次の記録まで続く)。付けていない偉業は、宣言した日までの結びついたタスクの実行の割合"],
+        ["見込みの直し", "自分で見込みを付けて終えた偉業の当たり具合で直す:見込み ×(成し遂げた割合 ÷ 付けた見込みの平均)。成し遂げた割合は(成し遂げた数 + 1)÷(終えた数 + 2)、付けた見込みの平均は(合計 + 0.5)÷(終えた数 + 1)。低めに付けて成功し続けると、見込みが引き上げられ、難しさが下がる"],
+        ["結果", "偉業は省アプリで終えるときに付けた成功・失敗・途中まで(%)。作戦期の目標は期日に記録した値 ÷ 目標の値、RAIDは期限までに制圧・引き渡し、ALERTは期限までに収束"],
+        ["統治", "上の統治の割合(その日の値)"]]) +
       note("計算は行軍表が行い、roadmap/gov/prestige.json に書き出したものを、ここで表示しています。")) +
     note("毎朝の計算(GitHub Actions)の中の細かい式は、その仕組みのファイルを見せてもらえれば、ここにそのまま載せられます。");
 }
